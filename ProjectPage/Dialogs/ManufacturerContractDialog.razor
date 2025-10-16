@@ -1,0 +1,460 @@
+@inject IStringLocalizer<ManufacturerContractDialog> L
+@using System.Text
+@using InnFork.Application.Features.BaseActorModels.DTOs
+@using System.Numerics
+
+
+
+@inject ICurrentUserService _currentUserService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudForm @ref="_form" Class="pa-4">
+        <MudPaper Elevation="2" Class="pa-4" Style="min-width: 1200px; max-width: 1800px;">
+            <!-- Заголовок и информация о производителе -->
+            <MudCard Elevation="0" Class="mb-4 pb-0" Style="background-color: var(--mud-palette-background-grey);">
+                <MudCardHeader>
+
+                </MudCardHeader>
+
+                <!-- Карточка общей статистики -->
+                <MudCardContent Class="pb-0">
+                    <MudPaper Elevation="0" Class="pa-2">
+                        <MudGrid>
+                            <MudItem xs="12" md="3">
+                                <MudPaper Elevation="0" Class="pa-4 d-flex flex-column align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Info" Size="Size.Large" Class="mb-2" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Default">@L["Общий баланс"]</MudText>
+                                    <MudText Typo="Typo.h4" Color="Color.Info" Class="mt-1">@_totalBalance</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="12" md="3">
+                                <MudPaper Elevation="0" Class="pa-4 d-flex flex-column align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Color="Color.Success" Size="Size.Large" Class="mb-2" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Default">@L["Свободный баланс"]</MudText>
+                                    <MudText Typo="Typo.h4" Color="Color.Success" Class="mt-1">@_freeBalance</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="12" md="3">
+                                <MudPaper Elevation="0" Class="pa-4 d-flex flex-column align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.Stars" Color="Color.Warning" Size="Size.Large" Class="mb-2" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Default">@L["Внешняя оценка"]</MudText>
+                                    <div class="d-flex align-center mt-1">
+                                        <MudRating ReadOnly="true" SelectedValue="@((int)(_externalRating % 5) + 1)" Size="Size.Medium" />
+                                        <MudText Typo="Typo.h5" Color="Color.Warning" Class="ml-2">@_externalRating</MudText>
+                                    </div>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="12" md="3">
+                                <MudPaper Elevation="0" Class="pa-4 d-flex flex-column align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.Score" Color="Color.Primary" Size="Size.Large" Class="mb-2" />
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Default">@L["Итоговый рейтинг"]</MudText>
+                                    <div>
+                                        <MudProgressCircular Value="@((int)(_finalScore % 100))" Color="Color.Primary" Size="Size.Medium" Thickness="4" Class="my-2">
+                                            <MudText Typo="Typo.h5">@_finalScore</MudText>
+                                        </MudProgressCircular>
+                                    </div>
+                                </MudPaper>
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                </MudCardContent>
+            </MudCard>
+
+            <!-- Основные вкладки -->
+            <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4" AlwaysShowScrollButtons="true">
+               
+                <!-- ВКЛАДКА: ПРОДУКТЫ -->
+                <MudTabPanel Icon="@Icons.Material.Filled.Inventory" Text="@L["Продукты"]">
+                    <MudGrid>
+                        <!-- ЛЕВАЯ ЧАСТЬ: Управление этапами продукта -->
+                        <MudItem xs="12" md="6">
+                            <MudCard Elevation="2" Class="h-100">
+                                <MudCardHeader>
+                                    <CardHeaderAvatar>
+                                        <MudIcon Icon="@Icons.Material.Filled.Timeline" Color="Color.Primary" />
+                                    </CardHeaderAvatar>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">@L["Управление этапами продукта"]</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+
+                                <MudCardContent>
+                   @*                  <MudAlert Severity="Severity.Info" Variant="Variant.Filled" Class="mb-4">@L["Настройте параметры текущего этапа разработки и финансирования"]</MudAlert>
+
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="mb-2">@L["Настройка параметров этапа"]</MudText> *@
+                                    <MudPaper Elevation="0" Class="pa-3 mb-4" Style="background-color: var(--mud-palette-background-grey);">
+                                        <MudNumericField @bind-Value="_paymentStage"
+                                                         Label="@L["Номер этапа"]"
+                                                         Variant="Variant.Outlined"
+                                                         Min="1"
+                                                         Adornment="Adornment.Start"
+                                                         AdornmentIcon="@Icons.Material.Filled.FormatListNumbered"
+                                                         HelperText="Номер этапа для настройки оплаты"
+                                                         Class="mb-3"
+                                                         FullWidth="true" />
+
+                                        <MudNumericField @bind-Value="_paymentAmount"
+                                                         Label="@L["Сумма оплаты"]"
+                                                         Variant="Variant.Outlined"
+                                                         Min="0"
+                                                         Adornment="Adornment.Start"
+                                                         AdornmentIcon="@Icons.Material.Filled.Payments"
+                                                         HelperText="Сумма к оплате за этап"
+                                                         Class="mb-3"
+                                                         FullWidth="true" />
+
+                                        <div class="d-flex justify-space-between align-center mb-2">
+                                            <MudSwitch T="bool"
+                                                       @bind-Checked="_payBefore"
+                                                       Label="@L["Оплата до начала этапа"]"
+                                                       Color="Color.Primary" />
+
+                                            <MudTooltip Text="При включении этой опции оплата за этап будет произведена до начала работ">
+                                                <MudIcon Icon="@Icons.Material.Filled.HelpOutline" Color="Color.Info" />
+                                            </MudTooltip>
+                                        </div>
+                                    </MudPaper>
+
+                                    <MudText Typo="Typo.subtitle2" Color="Color.Primary" Class="mb-2">@L["Действия с этапом"]</MudText>
+                                    <MudButtonGroup OverrideStyles="false" Variant="Variant.Filled" Class="mb-2">
+                                        <MudButton Color="Color.Warning"
+                                                   OnClick="SetStagePayment"
+                                                   StartIcon="@Icons.Material.Filled.AttachMoney"
+                                                   FullWidth="true"
+                                                   Size="Size.Medium"
+                                                   Class="py-2">
+                                            @L["Установить финансирование"]"
+                                        </MudButton>
+
+                                        <MudButton Color="Color.Info"
+                                                   OnClick="AdvanceStage"
+                                                   StartIcon="@Icons.Material.Filled.Forward"
+                                                   FullWidth="true"
+                                                   Size="Size.Medium"
+                                                   Class="py-2">@L["Продвинуть этап"]</MudButton>
+                                    </MudButtonGroup>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+
+                        <!-- ПРАВАЯ ЧАСТЬ: Управление продуктами -->
+                        <MudItem xs="12" md="6">
+                            <MudCard Elevation="2" Class="h-100">
+                                <MudCardHeader>
+                                    <CardHeaderAvatar>
+                                        <MudIcon Icon="@Icons.Material.Filled.Inventory" Color="Color.Secondary" />
+                                    </CardHeaderAvatar>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">@L["Управление продуктами"]</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+
+                                <MudCardContent>
+                                    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pt-3" Color="Color.Secondary">
+                                        <MudTabPanel Text="@L["Выбор продукта"]" Icon="@Icons.Material.Filled.List">
+                                            <MudAlert Severity="Severity.Info" Variant="Variant.Filled" Class="mb-4">@L["Выберите продукт для управления его этапами"]</MudAlert>
+
+                                            <MudSelect T="string" @bind-Value="_selectedProductId"
+                                                       Label="@L["Активный продукт"]"
+                                                       Variant="Variant.Outlined"
+                                                       AnchorOrigin="Origin.BottomCenter"
+                                                       HelperText="Выберите продукт для управления"
+                                                       AdornmentIcon="@Icons.Material.Filled.Category"
+                                                       Class="mb-4">
+                                                <MudSelectItem Value="@("product1")">Продукт 1</MudSelectItem>
+                                                <MudSelectItem Value="@("product2")">Продукт 2</MudSelectItem>
+                                            </MudSelect>
+
+                                            <MudPaper Elevation="0" Class="pa-3 mb-4" Style="background-color: var(--mud-palette-background-grey);">
+                                                <MudText Typo="Typo.subtitle2" Class="mb-2">@L["Информация о продукте"]</MudText>
+                                                <MudGrid>
+                                                    <MudItem xs="6">
+                                                        <MudText Typo="Typo.body2">@L["Текущий этап:"]</MudText>
+                                                        <MudText Typo="Typo.h6" Color="Color.Info">@L["3"]</MudText>
+                                                    </MudItem>
+                                                    <MudItem xs="6">
+                                                        <MudText Typo="Typo.body2">@L["Всего этапов:"]</MudText>
+                                                        <MudText Typo="Typo.h6" Color="Color.Info">@L["5"]</MudText>
+                                                    </MudItem>
+                                                </MudGrid>
+                                            </MudPaper>
+
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Color="Color.Info"
+                                                       FullWidth="true"
+                                                       StartIcon="@Icons.Material.Filled.Refresh">@L["Обновить список продуктов"]</MudButton>
+                                        </MudTabPanel>                                
+                                    </MudTabs>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+
+                <!-- ВКЛАДКА: ФИНАНСЫ -->
+                <MudTabPanel Icon="@Icons.Material.Filled.Payments" Text="@L["Финансы"]">
+                    <MudGrid>
+                        <!-- Вывод средств -->
+                        <MudItem xs="12" md="6">
+                            <MudCard Elevation="2" Class="h-100">
+                                <MudCardHeader>
+                                    <CardHeaderAvatar>
+                                        <MudIcon Icon="@Icons.Material.Filled.MonetizationOn" Color="Color.Success" />
+                                    </CardHeaderAvatar>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">@L["Управление средствами"]</MudText>
+                                    </CardHeaderContent>
+                                    <CardHeaderActions>
+                                        <MudTooltip Text="Обновить балансы">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Info" Size="Size.Small" OnClick="LoadBalances" />
+                                        </MudTooltip>
+                                    </CardHeaderActions>
+                                </MudCardHeader>
+
+                                <MudCardContent>
+                                    <!-- Балансы -->
+                                    <MudPaper Elevation="0" Class="pa-3 mb-4" Style="background-color: var(--mud-palette-background-grey);">
+                                        <MudGrid>
+                                            <MudItem xs="6">
+                                                <MudText Typo="Typo.subtitle2">@L["Общий баланс:"]</MudText>
+                                                <MudText Typo="Typo.h5" Color="Color.Info">@_totalBalance</MudText>
+                                            </MudItem>
+                                            <MudItem xs="6">
+                                                <MudText Typo="Typo.subtitle2">@L["Свободный баланс:"]</MudText>
+                                                <MudText Typo="Typo.h5" Color="Color.Success">@_freeBalance</MudText>
+                                            </MudItem>
+                                        </MudGrid>
+                                    </MudPaper>
+
+                                    <!-- Форма вывода средств -->
+                                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">@L["Вы можете вывести только доступные свободные средства"]</MudAlert>
+
+                                    <MudNumericField @bind-Value="_amountToWithdraw"
+                                                     Label="@L["Сумма для вывода"]"
+                                                     Variant="Variant.Outlined"
+                                                     Min="0"
+                                                     Adornment="Adornment.Start"
+                                                     AdornmentIcon="@Icons.Material.Filled.Money"
+                                                     HelperText="Укажите сумму для вывода (не больше свободного баланса)"
+                                                     Class="mb-3"
+                                                     FullWidth="true" />
+
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Warning"
+                                               OnClick="WithdrawFunds"
+                                               StartIcon="@Icons.Material.Filled.Send"
+                                               FullWidth="true"
+                                               Size="Size.Large"
+                                               Disabled="@(_amountToWithdraw <= 0)">@L["Вывести средства"]</MudButton>
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+
+                        <!-- Управление соглашениями -->
+                        <MudItem xs="12" md="6">
+                            <MudCard Elevation="2" Class="h-100">
+                                <MudCardHeader>
+                                    <CardHeaderAvatar>
+                                        <MudIcon Icon="@Icons.Material.Filled.Handshake" Color="Color.Primary" />
+                                    </CardHeaderAvatar>
+                                    <CardHeaderContent>
+                                        <MudText Typo="Typo.h6">@L["Управление соглашениями"]</MudText>
+                                    </CardHeaderContent>
+                                </MudCardHeader>
+
+                                <MudCardContent>              
+
+                                            <MudTextField @bind-Value="_agreementId"
+                                                          Label="@L["ID соглашения"]"
+                                                          Variant="Variant.Outlined"
+                                                          Adornment="Adornment.Start"
+                                                          AdornmentIcon="@Icons.Material.Filled.Description"
+                                                          HelperText="Введите идентификатор соглашения"
+                                                          Class="mb-4"
+                                                          FullWidth="true" />
+
+                                            <MudNumericField @bind-Value="_repaymentAmount"
+                                                             Label="@L["Сумма возврата"]"
+                                                             Variant="Variant.Outlined"
+                                                             Min="0"
+                                                             Adornment="Adornment.Start"
+                                                             AdornmentIcon="@Icons.Material.Filled.Payments"
+                                                             HelperText="Введите сумму к выплате по соглашению"
+                                                             Class="mb-4"
+                                                             FullWidth="true" />
+
+                                            <MudGrid>
+                                                <MudItem xs="6">
+                                                    <MudButton Variant="Variant.Filled"
+                                                               Color="Color.Success"
+                                                               OnClick="ConfirmAgreement"
+                                                               StartIcon="@Icons.Material.Filled.CheckCircle"
+                                                               FullWidth="true"
+                                                               Class="mb-3">@L["Подтвердить соглашение"]</MudButton>
+                                                </MudItem>
+                                                <MudItem xs="6">
+                                                    <MudButton Variant="Variant.Filled"
+                                                               Color="Color.Primary"
+                                                               OnClick="RepayAgreement"
+                                                               StartIcon="@Icons.Material.Filled.Payments"
+                                                               FullWidth="true"
+                                                               Class="mb-3">@L["Выплатить по соглашению"]</MudButton>
+                                                </MudItem>
+                                            </MudGrid>
+
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+         
+            
+            </MudTabs>
+       
+        
+        </MudPaper>
+    </MudForm>
+</MudContainer>
+
+@code {
+
+    [Parameter] public string ManufacturerAddress { get; set; } = "0x1234567890abcdef1234567890abcdef12345678"; // Замените на реальный адрес производителя}
+
+    private MudForm _form;
+
+    private async Task Save()
+    {
+        await _form.Validate();
+
+
+        if (_form.IsValid)
+        {
+            // Логика сохранения
+        }
+
+    }
+
+    private string _manufacturerName;
+    private string _newProductId;
+    private string _newProductName;
+    private string _selectedProductId;
+    private int _stageToAdvance;
+    private int _paymentStage;
+    private int _paymentAmount;
+    private bool _payBefore;
+
+
+    private string _manufacturerPublicKey;
+    private string _withdrawWallet;
+    private string _agreementId;
+    private BigInteger _amountToWithdraw;
+    private BigInteger _repaymentAmount;
+
+    private BigInteger _totalBalance;
+    private BigInteger _freeBalance;
+    private BigInteger _externalRating;
+    private BigInteger _finalScore;
+
+    private async Task WithdrawFunds() => await CallContract("withdrawManufacturer", ManufacturerAddress, _withdrawWallet, _amountToWithdraw);
+    private async Task ConfirmAgreement() => await CallContract("manufacturerConfirmAgreement", _agreementId);
+    private async Task RepayAgreement() => await CallContract("processManufacturerRepayment", _agreementId, _repaymentAmount);
+
+    private async Task LoadBalances()
+    {
+        _totalBalance = await QueryContract<BigInteger>("getTotalBalanceOfManufacturerAccount", ManufacturerAddress);
+        _freeBalance = await QueryContract<BigInteger>("getFreeBalanceOfManufacturerAccount", ManufacturerAddress);
+    }
+
+    private async Task GetRating()
+    {
+        _externalRating = await QueryContract<BigInteger>("getExternalRating", ManufacturerAddress);
+        _finalScore = await QueryContract<BigInteger>("calculateManufacturerFinalScore", ManufacturerAddress);
+    }
+
+    private Task CallContract(string method, params object[] args) => Task.CompletedTask;
+    private Task<T> QueryContract<T>(string method, params object[] args) => Task.FromResult(default(T));
+
+    [Parameter] public string ProjectId { get; set; } = "ProjectId"; // Замените на реальный ID проекта}
+    [Parameter] public string ManufacturerId { get; set; } = "ManufacturerId"; // Замените на реальный ID производителя}
+
+    private ManufacturerInfo _manufacturer;
+
+    private Task RegisterManufacturer() => CallContract("registerManufacturer", ManufacturerAddress, _manufacturerName);
+    private Task UpdateManufacturer() => CallContract("updateManufacturer", ManufacturerAddress, _manufacturerName);
+    private Task CreateProduct() => CallContract("createProduct", ManufacturerAddress, _newProductId, _newProductName);
+    private Task AdvanceStage() => CallContract("advanceProductStage", _selectedProductId, _stageToAdvance);
+    private Task SetStagePayment() => CallContract("setStagePayment", _selectedProductId, _paymentStage, _paymentAmount, _payBefore);
+
+    private async Task LoadManufacturer()
+    {
+        var result = await QueryContract<ManufacturerInfo>("getManufacturer", ManufacturerAddress);
+        _manufacturer = result;
+    }
+
+    // Примерные структуры и заглушки
+    private record ManufacturerInfo(string Name, string[] ProductIds);
+
+}
+
+
+
+@* 
+
+
+// Регистрация и управление аккаунтом производителя
+createManufacturerAccount(UInt160 manufacturerAddress, byte[] PublicKey): ManufacturerAccount
+getManufacturerAccount(UInt160 manufacturerAddress): ManufacturerAccount
+updateExistingManufacturerAccount(ManufacturerAccount account): void
+removeManufacturerAccount(UInt160 manufacturerAddress): void
+getTotalBalanceOfManufacturerAccount(UInt160 manufacturerAddress): BigInteger
+getFreeBalanceOfManufacturerAccount(UInt160 manufacturerAddress): BigInteger
+withdrawManufacturer(UInt160 manufacturerAddress, UInt160 wallet, BigInteger amountToWithdraw): void
+
+// Работа с соглашениями (Agreement)
+manufacturerConfirmAgreement(byte[] agreementId): void
+processManufacturerRepayment(byte[] agreementId, BigInteger amount): void
+
+// Финансовые операции производителя
+investAsInvestorToManufacturerCandidate(UInt160 investorAddress, UInt160 manufacturerId, BigInteger amount): void
+withdrawInvestment(UInt160 investorAddress, UInt160 manufacturerId, BigInteger amount): void
+processInvestorInvestments(UInt160 investorAddress, BigInteger amount): void
+processRepayment(byte[] agreementId, BigInteger amount): void
+setManufacturerMinInvestment(string projectId_Sha256, UInt160 manufacturerId, BigInteger minInvestment): void
+
+// Оценки и репутация
+calculateManufacturerWeightedVoteResult(UInt160 manufacturer): BigInteger
+calculateManufacturerFinalScore(UInt160 manufacturerId): BigInteger
+getExternalRating(UInt160 manufacturerId): BigInteger
+
+// Голосование, фонды и поэтапное финансирование
+isManufacturerCandidateRegistered(UInt160 manufacturerId): bool
+isManufacturerCandidateUsedSteppedFinancial(UInt160 manufacturerId): bool
+distributeManufacturerProfit(UInt160 manufacturer, BigInteger profit): void
+proposeProfitShare(UInt160 investor, UInt160 manufacturer, BigInteger profitSharePercentage): void
+withdrawInvestorProfit(UInt160 investor, UInt160 manufacturer): void
+canWithdrawInvestment(UInt160 investor, UInt160 manufacturer): bool
+getLatestMilestoneStepByBanufacturer(UInt160 manufacturer): byte
+canWithdrawReservedForManufacturerFunds(UInt160 backer, UInt160 manufacturer): bool
+unreserveBackerFundsFromManufacturerToPrizeFund(UInt160 backer, UInt160 manufacturer, BigInteger amount): void
+distributeConsentedFunds(UInt160 manufacturer): void
+
+
+Method: registerManufacturer(address manufacturerAddress, string name)
+Returns: bool
+
+Method: updateManufacturer(address manufacturerAddress, string name)
+Returns: bool
+
+Method: createProduct(address manufacturerAddress, string productId, string name)
+Returns: bool
+
+Method: advanceProductStage(string productId, int stage)
+Returns: bool
+
+Method: setStagePayment(string productId, int stage, int amount, bool payBefore)
+Returns: bool
+
+Method: getProduct(string productId)
+Returns: (string name, int currentStage, int totalStages, (int stage, int amount, bool payBefore)[] timeline)
+
+ *@

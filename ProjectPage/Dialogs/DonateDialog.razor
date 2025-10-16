@@ -1,0 +1,135 @@
+@inject IStringLocalizer<DonateDialog> L
+@using System.Net
+@using System.Text
+@using InnFork.Application.Features.BaseActorModels.DTOs
+
+<MudDialog Gutters="true">
+
+    <DialogContent>
+        <MudContainer>
+            @if (!IsSuccessLoaded)
+            {
+                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+            }
+            else
+            {
+                <MudText Style="white-space: pre-wrap;">@L["Funds in your account:"] @AvailableFunds</MudText>
+
+                <MudText Style="white-space: pre-wrap;">@L["Back this project (max 1000$ at once)"]</MudText>
+
+                <MudNumericField @bind-Value="DonateSum" Label="@L["Сумма на проект"]" Max="1000" Min="10" Variant="Variant.Outlined" />
+
+                <MudDivider></MudDivider>
+
+                <MudText Style="white-space: pre-wrap;">@L["Donate to Creator"]</MudText>
+
+                <MudSwitch @bind-Value="@DonateToCreator" Color="Color.Secondary" />
+
+                <MudNumericField Disabled="@(!DonateToCreator)" @bind-Value="PercentCount" Max="10" Min="1" Lines="5"
+                                 Label="@L["Процент от суммы для создателя проекта"]" Variant="Variant.Outlined" />
+            }
+
+        </MudContainer>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Ok">@L["Donate"]</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Ok" ButtonType="ButtonType.Submit">@L["Cancel"]</MudButton>
+    </DialogActions>
+
+</MudDialog>
+
+@inject ICurrentUserService _currentUserService
+
+@code
+{
+    public ulong AvailableFunds = 10030;
+
+    public  int PercentCount = 1;
+    public int DonateSum = 10;
+
+    public bool DonateToCreator = false;
+   
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    BaseActorModelDto BaseActor = new();
+
+    [CascadingParameter] public MainUserData ActorsModels { get; set; } = default!;
+
+    public bool IsSuccessLoaded { get; set; } = false;
+
+    // Флаги, чтобы инициализация выполнялась только один раз
+    private bool _parametersInitialized = false;
+    private bool _dataLoaded = false;
+    protected override async Task OnParametersSetAsync()
+    {
+        // Если каскадный параметр не установлен, пытаемся его загрузить
+        if (ActorsModels == null)
+        {
+            try
+            {
+                ActorsModels = await _currentUserService.RetrieveActorsModels();
+            }
+            catch (Exception ex)
+            {
+                return;
+            }
+        }
+
+        // Если ActorsModels успешно загружен, инициализируем связанные данные
+        if (!_parametersInitialized && ActorsModels != null)
+        {
+            _parametersInitialized = true;
+
+            if (ActorsModels.BaseActorModelId != Guid.Empty)
+            {
+                BaseActor = ActorsModels.BaseActorDtoModel;
+            }
+
+            // После инициализации параметров загружаем данные страницы
+            await InitializeDataAsync();
+        }
+    }
+
+    private async Task InitializeDataAsync()
+    {
+        // Защита от повторной загрузки данных
+        if (_dataLoaded)
+            return;
+
+        // Здесь можно выставить IsSuccessLoaded = false, если нужно показать процесс загрузки
+        IsSuccessLoaded = false;
+
+        try
+        {
+
+            // Если все данные успешно загружены, устанавливаем флаг
+            _dataLoaded = true;
+            IsSuccessLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Ошибка загрузки данных: " + ex.Message);
+            // Здесь можно добавить дополнительную обработку ошибки
+        }
+    }
+
+    // Если нет необходимости разделять логику, можно не использовать OnInitializedAsync,
+    // либо оставить для другой инициализации, не зависящей от параметров.
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        // Можно оставить пустым, если вся инициализация перенесена в OnParametersSetAsync
+    }
+    ////////////////////////////////////////////////////////////////
+
+    private string LicenseText;
+
+    private void Ok()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}

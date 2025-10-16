@@ -1,0 +1,1405 @@
+@inject IStringLocalizer<ProjectVotingDialog> L
+@using System.Numerics
+@using System.Threading.Tasks
+@using InnFork.Blockchain.NEO3
+@using InnFork.Domain.AnemicModels.App.Voting
+@using InnFork.NeoN3
+@using InnFork.Server.UI.Services.BlockChain.NeoN3
+@using Neo
+@using Neo.Network.RPC.Models
+@namespace InnFork
+
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<MudPaper Elevation="4" Class="pa-6 ma-4" MaxWidth="1800px" Style="border-radius: 16px;">
+    <!-- Верхняя панель с кнопкой проверки статуса -->
+    <MudStack Spacing="3" AlignItems="AlignItems.Center" Class="mb-6">
+        <MudButton OnClick="@CallGetProjectStatusesList" Variant="Variant.Outlined" Color="Color.Info" Size="Size.Large" StartIcon="@Icons.Material.Filled.Verified" FullWidth="true">@L["Проверить статусы проекта"]</MudButton>
+
+        <MudButton OnClick="@CallValidateProject" Variant="Variant.Outlined" Color="Color.Info" Size="Size.Large" StartIcon="@Icons.Material.Filled.Verified" FullWidth="true">@L["Валидация проекта"]</MudButton>
+    </MudStack>
+
+    <!-- Вкладки -->
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="mt-6" Position="Position.Top" PanelClass="pa-6">
+
+        <!-- Информация и статистика -->
+        <MudTabPanel Text="@L["Информация и Параметры"]" Icon="@Icons.Material.Filled.Info">
+            <div style="width: 100%">
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Elevation="2">
+                            <MudCardHeader>
+                                <MudText Typo="Typo.h6">@L["Статус проекта"]</MudText>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudAlert Severity="Severity.Info" Class="mb-3" Icon="@Icons.Material.Filled.Info">@ProjectStatusMessage</MudAlert>
+                                <MudAlert Severity="Severity.Info" Class="mb-3" Icon="@Icons.Material.Filled.HowToVote">@ProjectVotingStatusMessage</MudAlert>
+                                <MudAlert Severity="Severity.Info" Class="mb-3" Icon="@Icons.Material.Filled.Favorite">@ProjectIsLivingStatus</MudAlert>
+                                <MudStack Row="true" Spacing="2">
+                                    <MudButton OnClick="@getProjectStatusAsBoolean" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh">@L["Обновить статус проекта"]</MudButton>
+                                    <MudButton OnClick="@CallGetCurrentVoteTypeForProject" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.List">@L["Текущий Тип голосования"]</MudButton>
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Elevation="2">
+                            <MudCardHeader>
+                                <MudText Typo="Typo.h6">@L["Детали голосования"]</MudText>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudSelect T="VotingStepEnum" @bind-Value="@ProjectVotingType" Label="@L["Тип голосования"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="mb-3" AdornmentIcon="@Icons.Material.Filled.List" HelperText="Выберите тип">
+                                    @foreach (var status in Enum.GetValues(typeof(VotingStepEnum)).Cast<VotingStepEnum>())
+                                    {
+                                        <MudSelectItem Value="@status">@status.ToString()</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                <MudButton OnClick="@CallGetSpecifiedVoteCount" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Class="mb-3" StartIcon="@Icons.Material.Filled.People">@L["Количество голосов"]</MudButton>
+                                <MudButton OnClick="@CallGetVoterWeight" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Class="mb-3" StartIcon="@Icons.Material.Filled.Scale">@L["Вес голоса"]</MudButton>
+                                <MudButton OnClick="@CallGetVotingDeadline" Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Schedule">@L["Дедлайн"]</MudButton>
+                            </MudCardContent>
+
+                        </MudCard>
+                    </MudItem>
+
+
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Elevation="2">
+
+                            <MudCardHeader>
+                                <MudText Typo="Typo.h6">@L["Детали голосования"]</MudText>
+                            </MudCardHeader>
+
+                            <MudCardContent>
+
+
+                                <MudTextField @bind-Value="@ProjectAddress" Label="@L["Адрес проекта"]" Variant="Variant.Outlined" Required="true" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Home" HelperText="Введите адрес проекта" />
+
+                                <MudSwitch @bind-Value="@IsPause" Color="Color.Primary" Label="@L["Пауза проекта"]" ThumbIcon="@(IsPause? Icons.Material.Filled.Pause : Icons.Material.Filled.PlayArrow)" />
+
+                                <MudNumericField @bind-Value="@FundraisingIncreaseAmount" Label="@L["Сумма увеличения финансирования"]" Variant="Variant.Outlined" Min="1" Margin="Margin.Dense" HelperText="Укажите сумму" />
+
+                            </MudCardContent>
+
+                        </MudCard>
+
+
+
+                    </MudItem>
+                </MudGrid>
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.h6" Class="mb-3">Статистика по типам голосования</MudText>
+                <MudGrid Spacing="3">
+                    @foreach (var voteTypeObj in Enum.GetValues(typeof(InnForkGateway_VotingsSubsys.VoteType)))
+                    {
+                        var voteType = (InnForkGateway_VotingsSubsys.VoteType)voteTypeObj;
+                        int voteTypeIndex = (int)voteType;
+                        bool hasDeadline = voteTypeIndex >= 0 && voteTypeIndex < UnixTime_VotingDeadLines.Length && UnixTime_VotingDeadLines[voteTypeIndex] > 0;
+
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudCard Elevation="1">
+                                <MudCardContent>
+                                    <MudText Typo="Typo.subtitle2" GutterBottom="true">@voteType.ToString()</MudText>
+                                    @if (hasDeadline)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="mb-2">Дедлайн: <b>@(UnixTime_VotingDeadLines[voteTypeIndex] > 0 ? DateTimeOffset.FromUnixTimeSeconds((long)UnixTime_VotingDeadLines[voteTypeIndex]).ToString("g") : "-")</b></MudText>
+                                        <MudStack Row="true" Spacing="1">
+                                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined">За: @VotesFor[voteType]</MudChip>
+                                            <MudChip T="string" Color="Color.Error" Variant="Variant.Outlined">Против: @VotesAgainst[voteType]</MudChip>
+                                            <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined">Возд.: @VotesAbstained[voteType]</MudChip>
+                                        </MudStack>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.body2">@L["Нет данных"]</MudText>
+                                    }
+                                </MudCardContent>
+                            </MudCard>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </div>
+        </MudTabPanel>
+
+
+
+
+
+        <!-- Голосования по запуску проекта -->
+        <MudTabPanel Text="@L["Голосования по упрвлению проектом"]" Icon="@Icons.Material.Filled.HowToVote">
+            <!-- Панели голосований по типам -->
+            <MudExpansionPanels Elevation="0" MultiExpansion="true" Dense="true" Class="mt-3">
+                @foreach (VotingStepEnum step in Enum.GetValues(typeof(VotingStepEnum)))
+                {
+                    <MudExpansionPanel Text="@step.ToString()"
+                                       Icon="@GetIcon(step)"
+                                       Class="mb-4"
+                                       Style="background-color: rgba(255,255,255,0.05); border-radius: 4px;"
+                                       Expanded="true">
+
+
+                        <!-- Основной контент голосования -->
+                        <MudGrid>
+                            <!-- Левая колонка - вопрос и голосование -->
+                            <MudItem xs="12" md="7">
+
+
+                                <div class="d-flex gap-2 my-4">
+                                    <MudButton OnClick="@(() => Vote(step, true))"
+                                               Variant="Variant.Filled"
+                                               Color="Color.Success"
+                                               StartIcon="@Icons.Material.Filled.ThumbUp"
+                                               Size="Size.Medium"
+                                               Style="flex: 1;">@L["ЗА"]</MudButton>
+                                    <MudButton OnClick="@(() => Vote(step, false))"
+                                               Variant="Variant.Filled"
+                                               Color="Color.Error"
+                                               StartIcon="@Icons.Material.Filled.ThumbDown"
+                                               Size="Size.Medium"
+                                               Style="flex: 1;">@L["ПРОТИВ"]</MudButton>
+                                    <MudButton OnClick="@(() => Vote(step, null))"
+                                               Variant="Variant.Filled"
+                                               Color="Color.Default"
+                                               StartIcon="@Icons.Material.Filled.RemoveCircleOutline"
+                                               Size="Size.Medium"
+                                               Style="flex: 1;">@L["ВОЗДЕРЖАТЬСЯ"]</MudButton>
+                                </div>
+
+
+
+                                <!-- Главные индикаторы голосования - ЗА, ПРОТИВ, ВОЗДЕРЖАЛИСЬ -->
+                                <MudGrid Class="mb-2">
+                                    <MudItem xs="12" sm="4">
+                                        <MudText Typo="Typo.subtitle2" Color="Color.Success" Class="d-flex justify-start align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.ThumbUp" Size="Size.Small" Class="mr-2" />
+                                            For: 260486 (85%)
+                                        </MudText>
+                                        <MudProgressLinear Value="85" Color="Color.Success" Class="mt-1" Style="height: 6px; border-radius: 3px;" />
+                                    </MudItem>
+                                    <MudItem xs="12" sm="4">
+                                        <MudText Typo="Typo.subtitle2" Color="Color.Error" Class="d-flex justify-start align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.ThumbDown" Size="Size.Small" Class="mr-2" />
+                                            Against: 586 (3%)
+                                        </MudText>
+                                        <MudProgressLinear Value="3" Color="Color.Error" Class="mt-1" Style="height: 6px; border-radius: 3px;" />
+                                    </MudItem>
+                                    <MudItem xs="12" sm="4">
+                                        <MudText Typo="Typo.subtitle2" Color="Color.Default" Class="d-flex justify-start align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.RemoveCircleOutline" Size="Size.Small" Class="mr-2" />
+                                            Abstain: 2586 (12%)
+                                        </MudText>
+                                        <MudProgressLinear Value="12" Color="Color.Default" Class="mt-1" Style="height: 6px; border-radius: 3px;" />
+                                    </MudItem>
+
+                                </MudGrid>
+
+
+                                <MudGrid Class="mb-2">
+
+                                    <MudItem xs="12" md="7">
+
+                                        <MudText Typo="Typo.h6" Class="mb-3">@L["Управление голосованием"]</MudText>
+                                        <MudNumericField @bind-Value="@DeadlineExtensionTime"
+                                                         Label="@L["Время продления (дней)"]"
+                                                         Variant="Variant.Outlined"
+                                                         Margin="Margin.Dense"
+                                                         Class="mb-4"
+                                                         HelperText="Укажите время"
+                                                         Min="60"
+                                                         Adornment="Adornment.Start"
+                                                         AdornmentIcon="@Icons.Material.Filled.Timer" />
+
+                                        <MudButton OnClick="@CallAutoExtendVotingDeadline"
+                                                   Variant="Variant.Filled"
+                                                   Color="Color.Secondary"
+                                                   FullWidth="true"
+                                                   Class="mb-3"
+                                                   StartIcon="@Icons.Material.Filled.Schedule">@L["Продлить дедлайн"]</MudButton>
+
+                                        <MudButton OnClick="@CallFinalizeExpiredVoting"
+                                                   Variant="Variant.Outlined"
+                                                   Color="Color.Warning"
+                                                   FullWidth="true"
+                                                   StartIcon="@Icons.Material.Filled.DoneAll">@L["Завершить голосование"]</MudButton>
+                                      </MudItem>
+
+                                </MudGrid>
+
+
+
+
+                            </MudItem>
+
+                            <!-- Правая колонка - статистика и управление -->
+                            <MudItem xs="12" md="5">
+                                <!-- Статистика голосов -->
+                                <MudPaper Class="pa-4 mb-4" Style="background-color: rgba(100,130,200,0.1); border-radius: 8px;">
+                                    <MudText Typo="Typo.h6" Class="mb-3">@L["Статистика голосов"]</MudText>
+                                    <MudButton OnClick="@RefreshStatistics"
+                                               Variant="Variant.Filled"
+                                               Color="Color.Primary"
+                                               FullWidth="true"
+                                               Class="mb-4"
+                                               StartIcon="@Icons.Material.Filled.Refresh">@L["Обновить статистику проекта"]</MudButton>
+
+                                    <MudTable Items="@(new[] {
+                                                                                                  new { Key = @L["Общее количество голосов"], Value = _totalVotes.ToString() },
+                                                                                                  new { Key = @L["Вес голоса"], Value = VoterWeight.ToString() },
+                                                        new { Key = @L["Дедлайн"], Value = VotingDeadline.ToString("g") },
+                                                                                                  new { Key = @L["Ваш Выбор"], Value = SelectedVoteTypeLaunch.ToString() },
+                                                    })"
+                                          Dense="true"
+                                          Bordered="false"
+                                          Hover="true"
+                                          Class="mt-2"
+                                          Style="background-color: rgba(255,255,255,0.02); border-radius: 4px;">
+                                    <ColGroup>
+                                        <col style="width: 60%;" />
+                                        <col style="width: 40%;" />
+                                    </ColGroup>
+                                    <HeaderContent>
+                                        <MudTh>@L["Параметр"]</MudTh>
+                                        <MudTh>@L["Значение"]</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd DataLabel="@L["Key"]">@context.Key</MudTd>
+                                        <MudTd DataLabel="@L["Value"]" Style="font-weight: 500;">@context.Value</MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+
+                                </MudPaper>
+
+                            </MudItem>
+                        </MudGrid>
+
+           
+                    </MudExpansionPanel>
+                              
+                }
+            </MudExpansionPanels>
+        </MudTabPanel>
+
+
+
+
+
+
+
+
+
+
+
+        <!-- Голосования по этапам -->
+        <MudTabPanel Text="@L["Голосования по вехам производителей"]" Icon="@Icons.Material.Filled.HowToVote">
+            <MudText Typo="Typo.h5" Class="mb-4">@L["Выбор производителя"]</MudText>
+
+            <!-- Карточки производителей -->
+            <MudGrid Spacing="3">
+                @foreach (var manufacturer in ManufacturerOptions)
+                {
+                    <MudItem xs="12">
+                        <MudCard Elevation="3" Class="mb-4">
+                            <MudCardHeader>
+                                <MudText Typo="Typo.h6">@L["Производитель:"] @manufacturer.Substring(0, 4)</MudText>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudGrid>
+                                    <!-- Изображение или логотип производителя -->
+                                    <MudItem xs="12" sm="3">
+                                        <MudPaper Width="170px" Height="170px" Elevation="0" Outlined="true" Class="d-flex justify-center align-center">
+                                            <MudIcon Icon="@Icons.Material.Filled.Factory" Size="Size.Large" />
+                                        </MudPaper>
+                                    </MudItem>
+
+                                    <!-- Таймлайн с датами и суммами -->
+                                    <MudItem xs="12" sm="9">
+                                        <MudText Typo="Typo.body1" Class="mb-2">@L["График проекта:"]</MudText>
+                                        <MudTimeline TimelineOrientation="TimelineOrientation.Horizontal" TimelinePosition="TimelinePosition.Alternate" 
+                                        TimelineAlign="TimelineAlign.Start">
+
+
+
+
+                                            @for (int x = 0; x != 5; x++)
+                                            {
+                                                <MudTimelineItem  Color="Color.Warning" Variant="Variant.Filled">
+
+                                                    <ItemContent>
+                                                        <MudAlert Severity="Severity.Warning">@L["Начало"]</MudAlert>
+                                                    </ItemContent>
+
+                                                    <ItemOpposite>
+                                                        <MudText Typo="Typo.body1">20.04.2024</MudText>
+                                                        <MudText Typo="Typo.caption">"100000 $"</MudText>
+                                                    </ItemOpposite>
+
+                                                </MudTimelineItem>
+                                            }
+
+                                        </MudTimeline>
+
+                                        <MudGrid Class="mt-4">
+                                            <MudItem xs="6">
+                                                <MudText Typo="Typo.subtitle2">@L["Тип оплаты:"] <MudChip T="string" Size="Size.Small" Color="Color.Success">после</MudChip></MudText>
+                                            </MudItem>
+                                            <MudItem xs="6">
+                                                <MudText Typo="Typo.subtitle2">@L["Дедлайн: 30.04.2024"]</MudText>
+                                            </MudItem>
+                                        </MudGrid>
+                                    </MudItem>
+                                </MudGrid>
+
+                                <!-- Блок голосования -->
+                                <MudDivider Class="my-3" />
+                                <MudGrid>
+                                    <MudItem xs="12" sm="4">
+                                        <MudText Typo="Typo.body1">@L["За: 260 (85%)"]</MudText>
+                                        <MudProgressLinear Value="85" Vertical=false Color="Color.Success" Class="my-2" />
+                                    </MudItem>
+                                    <MudItem xs="12" sm="4">
+                                        <MudText Typo="Typo.body1">@L["Против: 30 (10%)"]</MudText>
+                                        <MudProgressLinear Value="10" Vertical="false" Color="Color.Error" Class="my-2" />
+                                    </MudItem>
+                                    <MudItem xs="12" sm="4">
+                                        <MudText Typo="Typo.body1">@L["Воздержались: 15 (5%)"]</MudText>
+                                        <MudProgressLinear Vertical="false" Value="5" Color="Color.Info" Class="my-2" />
+                                    </MudItem>
+                                </MudGrid>
+
+                                <!-- Кнопки голосования -->
+                                <MudGrid Class="mt-3">
+                                    <MudItem xs="12">
+                                        <MudText Typo="Typo.subtitle1" Class="mb-2">@L["Ваш голос:"]</MudText>
+                                        <MudPaper Elevation="0" Class="d-flex justify-center gap-2 py-2">
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Class="px-6"
+                                                       OnClick="@(() => ManufacturerSelectionVoteChoice = BackerVotesEnum.Positive)">@L["ДА"]</MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Error" Class="px-6"
+                                                       OnClick="@(() => ManufacturerSelectionVoteChoice = BackerVotesEnum.Negative)">@L["НЕТ"]</MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Default" Class="px-6"
+                                                       OnClick="@(() => ManufacturerSelectionVoteChoice = BackerVotesEnum.Abstained)">@L["ВОЗДЕРЖАТЬСЯ"]</MudButton>
+                                        </MudPaper>
+                                    </MudItem>
+                                </MudGrid>
+                            </MudCardContent>
+                            <MudCardActions>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                           OnClick="@(() => CallVoteManufacturerWinnerSelection())">@L["Проголосовать"]</MudButton>
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+
+        </MudTabPanel>
+
+        <!-- Личные настройки Backer -->
+        <MudTabPanel Text="@L["Личные настройки"]" Icon="@Icons.Material.Filled.Person">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="2">
+                        <MudCardHeader>
+                            <MudText Typo="Typo.h6">@L["Настройки голосования"]</MudText>
+                        </MudCardHeader>
+                        <MudCardContent>
+
+                            <MudSelect T="string" @bind-Value="SelectedManufacturerId"
+                                       Label="@L["Выбранный производитель"]"
+                                       Variant="Variant.Outlined"
+                                       AnchorOrigin="Origin.BottomCenter"
+                                       HelperText="Выберите продукт для управления"
+                                       AdornmentIcon="@Icons.Material.Filled.Category"
+                                       Class="mb-4">
+
+                                       @foreach(var manufacturer in ManufacturerOptions) 
+                                       {
+                                        <MudSelectItem Value="@manufacturer">@manufacturer</MudSelectItem>
+                                       }
+
+                            </MudSelect>
+
+
+                            <MudButton OnClick="@CallSetAutoVoteForManufacturer" Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true" Class="mb-3"
+                                       StartIcon="@Icons.Material.Filled.HowToVote">@L["Установить автоголосование за selected manufacturer as Winner"]</MudButton>
+
+
+                            <MudSwitchM3 T="bool" Value="AutoVoteForManufacturer" Label="@L["Установить автоголосование за selected manufacturer as Winner "]" />
+
+                            <MudCheckBox T="bool" Value="BackerAutoConsent" Label="@L["Установить автосогласие на оплату из призового фонда Manufacturers Milestone"]" />
+
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        </MudTabPanel>
+
+
+
+
+    </MudTabs>
+
+    <!-- Нижняя панель с результатами -->
+    <MudDivider Class="my-6" />
+    <MudPaper Elevation="0" Class="pa-4">
+        <MudText Typo="Typo.subtitle1" GutterBottom="true">@L["Последний вызванный метод:"] <b>@_lastCalledMethod</b></MudText>
+        <MudText Typo="Typo.body1" Style="white-space: pre-wrap;">@_lastResult</MudText>
+    </MudPaper>
+
+    <!-- Кнопка закрытия -->
+    <MudDivider Class="my-6" />
+    <MudStack Row="true" Justify="Justify.FlexEnd">
+        <MudButton OnClick="@Close" Variant="Variant.Outlined" Color="Color.Error" Size="Size.Large" StartIcon="@Icons.Material.Filled.Close">@L["Закрыть"]</MudButton>
+    </MudStack>
+</MudPaper>
+
+
+@inject InnForkGateway_VotingsSubsys innForkGateway_VotingsSubsys
+
+@inject IProjectService _projectService
+@inject IProjectOfferService _projectOfferService
+@inject IProjectCreatorService _projectCreatorService
+
+@inject IBackerService _backerService
+
+@inject IInvestorService _investorService
+@inject IManufacturerService _manufacturerService
+
+@inject IMapper _mapper
+
+@inject IDialogService DialogService
+
+@inject IBaseActorModelService _baseActorModelService
+@inject ICurrentUserService currentUserService
+@inject WalletConnectClientService WC_ClientService
+
+@inject INeoSCInterop NeoCSInteropService
+
+@code
+{
+
+    // Ensure VotesFor, VotesAgainst, and VotesAbstained dictionaries are properly initialized with the correct key type.
+    private Dictionary<InnForkGateway_VotingsSubsys.VoteType, int> VotesFor { get; set; } = Enum.GetValues(typeof(InnForkGateway_VotingsSubsys.VoteType))
+        .Cast<InnForkGateway_VotingsSubsys.VoteType>()
+        .ToDictionary(voteType => voteType, _ => 0);
+
+    private Dictionary<InnForkGateway_VotingsSubsys.VoteType, int> VotesAgainst { get; set; } = Enum.GetValues(typeof(InnForkGateway_VotingsSubsys.VoteType))
+        .Cast<InnForkGateway_VotingsSubsys.VoteType>()
+        .ToDictionary(voteType => voteType, _ => 0);
+
+    private Dictionary<InnForkGateway_VotingsSubsys.VoteType, int> VotesAbstained { get; set; } = Enum.GetValues(typeof(InnForkGateway_VotingsSubsys.VoteType))
+        .Cast<InnForkGateway_VotingsSubsys.VoteType>()
+        .ToDictionary(voteType => voteType, _ => 0);
+
+
+    // Параметры переменных UI-элементов
+    private BackerVotesEnum SelectedVoteTypeLaunch { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypeFundraising { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypeClosure { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypeRefund { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypePauseResume { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypeFundraisingIncrease { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypeUpdate { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum ManufacturerSelectionVoteChoice { get; set; } = BackerVotesEnum.Positive; //
+    private BackerVotesEnum MilestoneVoteChoice { get; set; } = BackerVotesEnum.Positive; //
+
+    // Параметры для статистики
+    private string MilestoneManufacturerAddress { get; set; } = "";
+    private string SelectedManufacturerId { get; set; } = "";
+
+
+    private List<string> ManufacturerOptions { get; set; } = new List<string>();
+
+    private BigInteger ManufacturerSelectionPositive { get; set; } = BigInteger.Zero;
+    private BigInteger ManufacturerSelectionNegative { get; set; } = BigInteger.Zero;
+    private BigInteger LaunchApprovalPositive { get; set; } = BigInteger.Zero;
+    private BigInteger LaunchApprovalNegative { get; set; } = BigInteger.Zero;
+    private BigInteger TerminationRefundPositive { get; set; } = BigInteger.Zero;
+    private BigInteger TerminationRefundNegative { get; set; } = BigInteger.Zero;
+    private BigInteger AbstainedVotes { get; set; } = BigInteger.Zero;
+    private BigInteger ProjectUpdatePositive { get; set; } = BigInteger.Zero;
+    private BigInteger ProjectUpdateNegative { get; set; } = BigInteger.Zero;
+    private BigInteger PauseResumePositive { get; set; } = BigInteger.Zero;
+    private BigInteger PauseResumeNegative { get; set; } = BigInteger.Zero;
+    private int AbstainedVotesPercentage { get; set; } = 0;
+    private int FundraisingCompletionProgress { get; set; } = 0;
+    private int ActiveVotingsCount { get; set; } = 0;
+    private int CompletedVotingsCount { get; set; } = 0;
+    private BigInteger _totalVotes { get; set; } = BigInteger.Zero;
+    private BigInteger VoterWeight { get; set; } = BigInteger.Zero;
+    private DateTime VotingDeadline { get; set; } = DateTime.Now.AddDays(7);
+
+
+
+
+    private string ProjectIsLivingStatus { get; set; } ="Нет информации о статусе проекта";
+    private string ProjectVotingStatusMessage = "Нет информации о статусе голос";
+    private string ProjectStatusMessage { get; set; } = "Нет данных о статусе проекта";
+    private string MilestoneCompletionStatus { get; set; } = "Нет информации";
+    private string FundraisingIncreaseStatus { get; set; } = "Нет информации";
+
+    // Параметры для дополнительных действий
+    private BigInteger DeadlineExtensionTime { get; set; } = 3600; // 1 час по умолчанию
+    private BigInteger FundraisingIncreaseAmount { get; set; } = 1000000; // Значение по умолчанию
+
+    // Параметры для инициализации
+    private string _backerAddressString;
+
+    [Parameter]
+    public string BackerAddressString
+    {
+        get => _backerAddressString;
+        set => _backerAddressString = value;
+    }
+
+    private async Task<string> GetBackerAddressAsync()
+    {
+        var actorModel = await currentUserService.RetrieveActorsModels();
+        return actorModel.BaseActorDtoModel.Backer.NEO_Account_ScriptHash;
+    }
+
+
+    // Базовые параметры для тестирования
+    [Parameter] public string ProjectAddress { get; set; } = "";
+    [Parameter] public string ManufacturerAddressString { get; set; } = "0x0123456789abcdef0123456789abcdef01234567";
+    [Parameter] public VotingStepEnum ProjectVotingType { get; set; } = VotingStepEnum.ApproveProjectLaunch; // Update default value
+    [Parameter] public bool Approve { get; set; } = true;
+    [Parameter] public string UpdateHash { get; set; } = "hash123456";
+    [Parameter] public byte MilestoneStep { get; set; } = 1;
+    [Parameter] public bool IsPause { get; set; } = false;
+
+    // Отображение результатов
+    private string _lastCalledMethod = "-";
+    private string _lastResult = "Нет результатов";
+
+
+
+
+
+    // Corrected property definitiony
+    public ulong[] UnixTime_VotingDeadLines { get; set; } = new ulong[Enum.GetNames(typeof(InnForkGateway_VotingsSubsys.VoteType)).Length];
+
+    private async Task RefreshStatistics()
+    {
+        try
+        {
+            // Обновление статистики голосования
+            string[]? activeVotings = await innForkGateway_VotingsSubsys.getActiveVotingsForProject(ProjectAddress);
+
+            BigInteger voterWeight = await innForkGateway_VotingsSubsys.getVoterWeight(ProjectAddress, GetUInt160FromString(BackerAddressString));
+            ulong votingDeadlineUnixTime = await innForkGateway_VotingsSubsys.getVotingDeadline(ProjectAddress, (int)ProjectVotingType);
+
+            // Обновление значений для запуска проекта
+            BigInteger launchPositive = await innForkGateway_VotingsSubsys.getLaunchApprovalPositiveVotes(ProjectAddress);
+            BigInteger launchNegative = await innForkGateway_VotingsSubsys.getLaunchApprovalNegativeVotes(ProjectAddress);
+
+            // Обновление для производителя
+            BigInteger manufacturerNegative = await innForkGateway_VotingsSubsys.getManufacturerSelectionNegativeVotes(ProjectAddress);
+
+            // Обновление для голосования о завершении с возвратом
+            BigInteger terminationRefundPositive = await innForkGateway_VotingsSubsys.getTerminationWithRefundPositiveVotes(ProjectAddress);
+            BigInteger terminationRefundNegative = await innForkGateway_VotingsSubsys.getTerminationWithRefundNegativeVotes(ProjectAddress);
+
+            // Обновление для голосования о паузе/возобновлении
+            BigInteger pauseResumePositive = await innForkGateway_VotingsSubsys.getPauseResumePositiveVotes(ProjectAddress);
+            BigInteger pauseResumeNegative = await innForkGateway_VotingsSubsys.getPauseResumeNegativeVotes(ProjectAddress);
+
+            // Обновление для голосования по обновлениям проекта
+            BigInteger projectUpdatePositive = await innForkGateway_VotingsSubsys.getProjectUpdatePositiveVotes(ProjectAddress, UpdateHash);
+            BigInteger projectUpdateNegative = await innForkGateway_VotingsSubsys.getProjectUpdateNegativeVotes(ProjectAddress, UpdateHash);
+
+            // Получение данных о воздержавшихся
+            BigInteger abstainedVotes = await innForkGateway_VotingsSubsys.getAbstainedVotes(ProjectAddress, (int)ProjectVotingType);
+            BigInteger abstainedPercentage = await innForkGateway_VotingsSubsys.getAbstainedVotesPercentage(ProjectAddress, (int)ProjectVotingType);
+
+            // Расчет прогресса сбора средств
+            BigInteger positiveVotes = await innForkGateway_VotingsSubsys.getFundraisingCompletionPositiveVotes(ProjectAddress);
+            BigInteger negativeVotes = await innForkGateway_VotingsSubsys.getFundraisingCompletionNegativeVotes(ProjectAddress);
+
+            // Обновление состояния запроса на увеличение финансирования
+            bool fundraisingIncreaseStatus = await innForkGateway_VotingsSubsys.getFundraisingIncreaseVotingStatus(ProjectAddress);
+
+
+#if DEBUG
+
+            ManufacturerAddressString = BackerAddressString; // Замените на реальный адрес производителя для тестирования
+
+#endif
+
+            // Данные о завершении этапа производителем
+            bool milestoneCompletionStatus = await innForkGateway_VotingsSubsys.getMilestoneCompletionVotingStatus(
+                ProjectAddress,
+                GetUInt160FromString(ManufacturerAddressString),
+                MilestoneStep);
+
+            // Обновление данных о статусе голосования для производителя
+            if (SelectedManufacturerId != null)
+            {
+                BigInteger manufacturerPositive = await innForkGateway_VotingsSubsys.getManufacturerSelectionPositiveVotes(
+                    ProjectAddress,
+                    GetUInt160FromString(SelectedManufacturerId));
+                ManufacturerSelectionPositive = manufacturerPositive;
+            }
+            // Присвоение значений переменным
+
+
+            // Обновление счетчика активных голосований
+            if (activeVotings != null && activeVotings.Length > 0)
+            {
+                _totalVotes = positiveVotes + negativeVotes + launchPositive + launchNegative + manufacturerNegative + terminationRefundPositive + terminationRefundNegative + pauseResumePositive + pauseResumeNegative + projectUpdatePositive + projectUpdateNegative;
+            }
+
+
+            VoterWeight = voterWeight;
+            VotingDeadline = DateTimeOffset.FromUnixTimeSeconds((long)votingDeadlineUnixTime).DateTime;
+            FundraisingIncreaseStatus = fundraisingIncreaseStatus ? "Запрос на увеличение финансирования активен" : "Запрос на увеличение финансирования завершен";
+
+            if (positiveVotes != 0 && negativeVotes != 0)
+            {
+                FundraisingCompletionProgress = (int)((positiveVotes * 100) / (positiveVotes + negativeVotes));
+            }
+
+            ProjectVotingStatusMessage = $"Статус голосования: {activeVotings?.Length ?? 0} активных голосований\n" +
+                                        $"Ваш вес голоса : {voterWeight}\n" +
+                                        $"Дедлайн голосования: {VotingDeadline}\n" +
+                                        $"Статус по увеличению финансирования: {FundraisingIncreaseStatus}\n" +
+                                        $"Статус по завершению этапа оплаты вехи: {milestoneCompletionStatus}";
+
+            MilestoneCompletionStatus = milestoneCompletionStatus ? "Голосование активно" : "Голосование завершено";
+
+            LaunchApprovalPositive = launchPositive;
+            LaunchApprovalNegative = launchNegative;
+            ManufacturerSelectionNegative = manufacturerNegative;
+            TerminationRefundPositive = terminationRefundPositive;
+            TerminationRefundNegative = terminationRefundNegative;
+
+            PauseResumePositive = pauseResumePositive;
+            PauseResumeNegative = pauseResumeNegative;
+            ProjectUpdatePositive = projectUpdatePositive;
+            ProjectUpdateNegative = projectUpdateNegative;
+
+            AbstainedVotes = abstainedVotes;
+            AbstainedVotesPercentage = (int)abstainedPercentage;
+            MilestoneManufacturerAddress = ManufacturerAddressString;
+            SelectedManufacturerId = ManufacturerAddressString;
+            MilestoneStep = 1; // Сброс значения этапа после обновления статистики
+
+            SelectedVoteTypeLaunch = BackerVotesEnum.Positive;
+            SelectedVoteTypeFundraising = BackerVotesEnum.Positive;
+            SelectedVoteTypeClosure = BackerVotesEnum.Positive;
+            SelectedVoteTypeRefund = BackerVotesEnum.Positive;
+            SelectedVoteTypePauseResume = BackerVotesEnum.Positive;
+            SelectedVoteTypeFundraisingIncrease = BackerVotesEnum.Positive;
+            SelectedVoteTypeUpdate = BackerVotesEnum.Positive;
+            ManufacturerSelectionVoteChoice = BackerVotesEnum.Positive;
+            MilestoneVoteChoice = BackerVotesEnum.Positive;
+
+            ProjectVotingType = VotingStepEnum.ApproveProjectLaunch; // Сброс значения типа голосования после обновления статистики
+
+
+            StateHasChanged();
+            ShowResult("RefreshStatistics", "Статистика успешно обновлена");
+        }
+        catch (Exception ex)
+        {
+            ShowResult("RefreshStatistics", $"Ошибка при обновлении статистики: {ex.Message}");
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+         
+        ProjectIsLivingStatus = L["Нет информации о статусе проекта"];
+        ProjectVotingStatusMessage = L["Нет информации о статусе голос"];   
+        ProjectStatusMessage = L["Нет данных о статусе проекта"];   
+        MilestoneCompletionStatus = L["Нет информации"];    
+        FundraisingIncreaseStatus = L["Нет информации"];
+
+
+        // Инициализация BackerAddressString
+        BackerAddressString = await GetBackerAddressAsync();
+
+        // Инициализация списка производителей (для примера)
+        ManufacturerOptions = new List<string>()
+        {
+            "0x0123456789abcdef0123456789abcdef01234567",
+            "0x9876543210abcdef0123456789abcdef01234567",
+            "0x5555555555abcdef0123456789abcdef01234567"
+        };
+
+        // Первоначальное получение данных
+        await  CallGetProjectStatusesList();
+       await  GetManufacturersOfProjects();
+    }
+
+    [Parameter]
+    public ProjectDto Project { get; set; } = new();
+
+    public async Task GetManufacturersOfProjects()
+    {
+        if (Project.ManufacturersCandidatesDtos != null && Project.ManufacturersCandidatesDtos.Count > 0)
+        {
+            foreach (var manufacturer in Project.ManufacturersCandidatesDtos)
+            {
+                ManufacturerOptions.Add(manufacturer.ManufacturerName);
+            }
+        }
+    }
+
+
+    #region Методы вызова API для голосований
+
+    private async Task CallVoteProjectLaunch()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeLaunch == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteProjectLaunch(
+                ProjectAddress, voterAddress, approve);
+
+            ShowResult("voteProjectLaunch", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteProjectLaunch", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteFundraisingCompletion()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeFundraising == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteFundraisingCompletion(
+                ProjectAddress, voterAddress, approve);
+
+            ShowResult("voteFundraisingCompletion", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteFundraisingCompletion", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteSuccefullClosure()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeClosure == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteSuccefullClosure(
+                ProjectAddress, voterAddress, approve);
+
+            ShowResult("voteSuccefullClosure", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteSuccefullClosure", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteTerminateProjectAndRefund()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeRefund == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteTerminateProjectAndRefund(
+                ProjectAddress, voterAddress, approve);
+
+            ShowResult("voteTerminateProjectAndRefund", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteTerminateProjectAndRefund", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVotePauseResumeProject()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypePauseResume == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.votePauseResumeProject(
+                ProjectAddress, voterAddress, IsPause, approve);
+
+            ShowResult("votePauseResumeProject", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("votePauseResumeProject", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteFundraisingIncrease()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeFundraisingIncrease == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteFundraisingIncrease(
+                ProjectAddress, voterAddress, approve);
+
+            ShowResult("voteFundraisingIncrease", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteFundraisingIncrease", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallRequestFundraisingIncrease()
+    {
+        try
+        {
+            var requesterAddress = GetUInt160FromString(BackerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.requestFundraisingIncrease(
+                ProjectAddress, requesterAddress, FundraisingIncreaseAmount);
+
+            ShowResult("requestFundraisingIncrease", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("requestFundraisingIncrease", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteProjectUpdates()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeUpdate == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteProjectUpdates(
+                ProjectAddress, voterAddress, approve, UpdateHash);
+
+            ShowResult("voteProjectUpdates", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteProjectUpdates", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteAbstain()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.voteAbstain(
+                ProjectAddress, voterAddress, (int)ProjectVotingType, UpdateHash);
+
+            ShowResult("voteAbstain", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteAbstain", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteManufacturerWinnerSelection()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            var manufacturerAddress = GetUInt160FromString(SelectedManufacturerId);
+            bool approve = ManufacturerSelectionVoteChoice == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteManufacturerWinnerSelection(
+                ProjectAddress, voterAddress, manufacturerAddress, approve);
+
+            ShowResult("voteManufacturerWinnerSelection", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteManufacturerWinnerSelection", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteMilestoneCompletion(string manufacturer, BackerVotesEnum backerVotesEnum)
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            var manufacturerAddress = GetUInt160FromString(ManufacturerAddressString);
+
+
+            bool approve = backerVotesEnum == BackerVotesEnum.Positive;
+
+
+            var result = await innForkGateway_VotingsSubsys.voteMilestoneCompletion(
+                ProjectAddress, voterAddress, manufacturerAddress, MilestoneStep, approve);
+
+            ShowResult("voteMilestoneCompletion", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteMilestoneCompletion", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+    #region Дополнительные методы API
+
+    private async Task CallProcessMilestoneFunding()
+    {
+        try
+        {
+            var manufacturerAddress = GetUInt160FromString(ManufacturerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.processMilestoneFunding(
+                ProjectAddress, manufacturerAddress, MilestoneStep);
+
+            ShowResult("processMilestoneFunding", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("processMilestoneFunding", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    bool bool_BackerAutoConsent = false;
+    bool BackerAutoConsent
+    {
+        get
+        {
+            return bool_BackerAutoConsent;
+        }
+        set
+        {
+            CallSetBackerAutoConsent().ConfigureAwait(false);
+        }
+    }
+
+    bool bool_AutoVoteForManufacturer = false;
+    bool AutoVoteForManufacturer
+    {
+        get
+        {
+            return bool_AutoVoteForManufacturer;
+        }
+        set
+        {
+            CallSetAutoVoteForManufacturer().ConfigureAwait(false);
+        }
+    }
+
+
+
+    private async Task CallSetAutoVoteForManufacturer()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            var manufacturerAddress = GetUInt160FromString(ManufacturerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.setAutoVoteForManufacturer(ProjectAddress, voterAddress, manufacturerAddress);
+
+            if(result!= null && (result.Exception == null || result.Exception.Length == 0))
+            {
+                ShowResult("setAutoVoteForManufacturer", "Результат: производитель выбран успешно");
+            }
+            else
+            {
+                ShowResult("setAutoVoteForManufacturer", $"Ошибка: {result?.Exception ?? "неизвестная ошибка"}");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowResult("setAutoVoteForManufacturer", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallSetBackerAutoConsent()
+    {
+        try
+        {
+            var backerAddress = GetUInt160FromString(BackerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.setBackerAutoConsent_ToUsePrizeFundToMilestoneFunding(
+                ProjectAddress, backerAddress, BackerAutoConsent);
+
+            ShowResult("setBackerAutoConsent_ToUsePrizeFundToMilestoneFunding", $"Результат: {result?.ToString() ?? "null"}");
+        }
+        catch (Exception ex)
+        {
+            ShowResult("setBackerAutoConsent_ToUsePrizeFundToMilestoneFunding", $"Ошибка: {ex.Message}");
+        }
+    }
+
+
+    private async Task CallGetBackerAutoConsent()
+    {
+        try
+        {
+            var backerAddress = GetUInt160FromString(BackerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.getBackerAutoConsent_ToUsePrizeFundToMilestoneFunding(
+                ProjectAddress, backerAddress);
+
+            ShowResult("getBackerAutoConsent", $"Результат: {result?.ToString() ?? "null"}");
+        }
+        catch (Exception ex)
+        {
+            ShowResult("getBackerAutoConsent", $"Ошибка: {ex.Message}");
+        }
+    }
+
+
+
+
+    private async Task CallAutoExtendVotingDeadline()
+    {
+        try
+        {
+            var result = await innForkGateway_VotingsSubsys.autoExtendVotingDeadline(
+                ProjectAddress, (int)(int)ProjectVotingType, (ulong)DeadlineExtensionTime);
+
+            if (result?.Exception != null)
+            {
+                ShowResult("autoExtendVotingDeadline", $"Ошибка: {result.Exception}");
+                return;
+            }
+
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("autoExtendVotingDeadline", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallFinalizeExpiredVoting()
+    {
+        try
+        {
+            var result = await innForkGateway_VotingsSubsys.finalizeExpiredVoting( ProjectAddress, (int)ProjectVotingType);
+        }
+        catch (Exception ex)
+        {
+            ShowResult("finalizeExpiredVoting", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallValidateProject()
+    {
+        try
+        {
+            bool result = await innForkGateway_VotingsSubsys.validateProjectIsLiving(ProjectAddress);
+
+            if (result)
+            {
+                ProjectIsLivingStatus = "Проект активен и живой";
+            }
+            else
+            {
+                ProjectIsLivingStatus = "Проект неактивен или завершен";
+            }
+
+            ShowResult("ValidateProjectIsLiving call result:" , ProjectIsLivingStatus); // Added confirmation message
+        }
+        catch (Exception ex)
+        {
+            ShowResult("validateProjectIsLiving", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task<string[]> CallGetProjectStatusesList()
+    {
+        try
+        {
+            var result = await innForkGateway_VotingsSubsys.getProjectStatusesList(ProjectAddress);
+
+            // Отображение результата
+            if (result != null && result.Length > 0)
+            {
+                ProjectStatusMessage = $"Статус проекта: {string.Join(", ", result)}";
+            }
+            else
+            {
+                ProjectStatusMessage = "Не удалось получить статус проекта";
+            }
+
+            ShowResult("getProjectStatus call result:", ProjectStatusMessage); // Added confirmation message
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ProjectStatusMessage = $"Ошибка при получении статуса: {ex.Message}";
+            ShowResult("getProjectStatus", $"Ошибка: {ex.Message}");
+            return null;
+        }
+    }
+    InnForkGateway_VotingsSubsys.ProjectStateRequest projectStatusType = InnForkGateway_VotingsSubsys.ProjectStateRequest.Paused;
+
+    private async Task<bool> getProjectStatusAsBoolean()
+    {
+        try
+        {        
+            var result = await innForkGateway_VotingsSubsys.getProjectStatusAsBoolean(ProjectAddress, projectStatusType);
+                            
+            string ProjectStatusMessage = $"Статус проекта: {string.Join(", ", result)}";
+    
+            ShowResult("getProjectStatus call result:", ProjectStatusMessage); // Added confirmation message
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ProjectStatusMessage = $"Ошибка при получении статуса: {ex.Message}";
+           
+            ShowResult("getProjectStatusAsBoolean", $"Ошибка: {ex.Message}");
+
+            return false;
+        }
+    }
+
+
+
+
+
+    
+
+    private async Task CallGetCurrentVoteTypeForProject()
+    {
+        try
+        {
+            int result = await innForkGateway_VotingsSubsys.getCurrentVoteTypeForProject(ProjectAddress);
+
+            if (result != 0)
+            {
+                ProjectVotingType = (VotingStepEnum)result; // Cast result to VoteStepEnum
+                ShowResult("getCurrentVoteTypeForProject", $"Тип голосования: {(int)ProjectVotingType}"); // Display the integer value of ProjectVotingType
+            }
+            else
+            {
+                ShowResult("getCurrentVoteTypeForProject", "Тип голосования не найден или равен 0");
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("getCurrentVoteTypeForProject", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallGetSpecifiedVoteCount()
+    {
+        try
+        {
+            BigInteger result = await innForkGateway_VotingsSubsys.getSpecifiedVoteCount(
+                ProjectAddress,
+                (InnForkGateway_VotingsSubsys.VoteType)ProjectVotingType,
+                InnForkGateway_VotingsSubsys.VoteCountType.Total,
+                string.Empty);
+
+            if (result != 0)
+            {
+                _totalVotes = result;
+                ShowResult("getSpecifiedVoteCount", $"Количество голосов: {_totalVotes}");
+            }
+            else
+            {
+                ShowResult("getSpecifiedVoteCount", "Количество голосов не найдено или равно 0");
+            }
+
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("getSpecifiedVoteCount", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallGetVoterWeight()
+    {
+        try
+        {
+            UInt160? voterAddress = GetUInt160FromString(BackerAddressString);
+            BigInteger result = await innForkGateway_VotingsSubsys.getVoterWeight(ProjectAddress, voterAddress);
+
+
+            ShowResult("getVoterWeight", $"Запрашиваю вес голоса для адреса: {voterAddress}"); // Добавлено сообщение для отображения адреса голосующего
+
+            if (result != 0)
+            {
+                VoterWeight = result;
+            }
+            else
+            {
+                ShowResult("getVoterWeight", "Вес голоса не найден или равен 0");
+            }
+
+            ShowResult("getVoterWeight", $"Вес голоса: {VoterWeight}");
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("getVoterWeight", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallGetVotingDeadline()
+    {
+        try
+        {
+            ulong DeadLineUnixTime = await innForkGateway_VotingsSubsys.getVotingDeadline(ProjectAddress, (int)ProjectVotingType);
+
+            if (DeadLineUnixTime != 0)
+            {
+                VotingDeadline = DateTimeOffset.FromUnixTimeSeconds((long)DeadLineUnixTime).DateTime;
+            }
+            else
+            {
+                ShowResult("getVotingDeadline", "Дедлайн голосования не найден или равен 0");
+            }
+
+
+            ShowResult("getVotingDeadline", $"Дедлайн голосования: {VotingDeadline}");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("getVotingDeadline", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+
+
+
+    // Вспомогательные методы для преобразований
+    private UInt160 GetUInt160FromString(string address)
+    {
+        try
+        {
+            return UInt160.Parse(address);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Неверный формат адреса: " + address, Severity.Error);
+            return UInt160.Zero;
+        }
+    }
+
+    private void ShowResult(string methodName, string result)
+    {
+        _lastCalledMethod = methodName;
+        _lastResult = result;
+    }
+
+
+
+
+
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+    private void Close() => MudDialog.Close(DialogResult.Ok(true));
+
+
+
+
+
+
+
+
+
+
+
+    [Parameter]
+    public VotingStepEnum step { get; set; }
+
+    Vote[] votes = {
+    new Vote {
+    CampaignId = Guid.NewGuid(), Voter = "User1", VoterToken = "token1",
+    Choice = "ApproveProjectLaunch", ChoiceToken = "choiceToken1" },
+    new Vote { CampaignId = Guid.NewGuid(), Voter = "User2",
+    VoterToken = "token2",
+    Choice = "AgreeBudgetChanges", ChoiceToken = "choiceToken2"
+    }
+};
+
+    public Voting actorVoting = new Voting
+    {
+        ApproveProjectLaunch = false,
+        NewBudgetAmount = 2000000,
+        Name = "Actor 1",
+        StartDate = DateTime.Now,
+        EndDate = DateTime.Now.AddDays(10),
+        Id = Guid.NewGuid(),
+        Category = "ProjectCategory 1",
+        Title = "Title 1",
+        Question = "Question 1",
+        Finished = false,
+        Description = "Description 1",
+        //        Answer = VotingStepEnum.AgreeProjectCompleteSuccessfully
+    };
+
+    public void Vote(VotingStepEnum step, bool? agree)
+    {
+        // Add voting functionality here.
+        // For example, you can update the actorVoting.Answer property based on the step and agree parameters.
+        // You can also add a new vote to the votes array with the current user and choice.
+    }
+
+    public string GetIcon(VotingStepEnum step)
+    {
+        // This method returns the icon name for each voting step.
+        // You can customize it as you wish.
+        switch (step)
+        {
+            case VotingStepEnum.ApproveProjectLaunch:
+                return Icons.Material.Filled.PlayArrow; // Иконка для старта проекта
+            case VotingStepEnum.ApproveFundraisingCompletion:
+                return Icons.Material.Filled.MonetizationOn; // Иконка для завершения сбора средств
+            case VotingStepEnum.ApproveProjectUpdates:
+                return Icons.Material.Filled.Edit; // Иконка для изменений в проекте
+            case VotingStepEnum.ApproveManufacturerSelection:
+                return Icons.Material.Filled.Star; // Иконка для выбора производителя
+            case VotingStepEnum.ApproveFundraisingIncrease:
+                return Icons.Material.Filled.FormatIndentIncrease;
+            case VotingStepEnum.VoteOnProjectPauseResume:
+                return Icons.Material.Filled.Pause; // Иконка для приостановки/возобновления
+            case VotingStepEnum.ApproveSuccessfulClosure:
+                return Icons.Material.Filled.DoneAll; // Иконка для успешного завершения
+            case VotingStepEnum.ApproveTerminationWithRefund:
+                return Icons.Material.Filled.Cancel; // Иконка для досрочного закрытия с возвратом
+            default:
+                return Icons.Material.Filled.Error; // Иконка для ошибки или неизвестного этапа
+        }
+    }
+
+}
+
+

@@ -1,0 +1,538 @@
+@inject IStringLocalizer<ProjectSettingsDialog> L
+@using System.Net
+@using System.Text
+@using InnFork.Application.Features.BaseActorModels.DTOs
+@using System.Numerics
+@using InnFork.NeoN3
+
+
+@inject ICurrentUserService _currentUserService
+
+
+
+
+<MudForm @ref="_form" Class="pa-4">
+    <MudPaper Elevation="2" Class="pa-4" Style="min-width: 1200px; max-width: 1800px;">
+        <MudTabs Elevation="1" Rounded="true" Position="Position.Top" ApplyEffectsToContainer="true" PanelClass="pa-6">
+            <!-- ВКЛАДКА: ГОЛОСОВАНИЕ -->
+            <MudTabPanel Text="@L["Голосование"]" Icon="@Icons.Material.Filled.HowToVote">
+                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-4">@L["Настройки голосования"]</MudText>
+
+                <MudCard Elevation="0" Class="mb-6">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">@L["Основные параметры"]</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="4">
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudNumericField T="BigInteger"
+                                                 Label="@L["Минимальное количество голосов"]"
+                                                 @bind-Value="Settings.MinimumVotesRequired"
+                                                 Variant="Variant.Outlined"
+                                                 HelperText="Укажите минимальное число голосов для принятия решения"
+                                                 Adornment="Adornment.Start"
+                                                 AdornmentIcon="@Icons.Material.Filled.HowToVote" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudNumericField T="BigInteger"
+                                                 Label="@L["Минимальный процент участия"]"
+                                                 @bind-Value="Settings.MinRequiredVotingParticipation"
+                                                 Variant="Variant.Outlined"
+                                                 HelperText="Процент участников для валидности голосования"
+                                                 Adornment="Adornment.Start"
+                                                 AdornmentIcon="@Icons.Material.Filled.Group" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudNumericField T="BigInteger"
+                                                 Label="@L["Минимальный процент голосов 'за'"]"
+                                                 @bind-Value="Settings.MinApprovalPercentage"
+                                                 Variant="Variant.Outlined"
+                                                 HelperText="Требуемый процент согласия"
+                                                 Adornment="Adornment.Start"
+                                                 AdornmentIcon="@Icons.Material.Filled.ThumbUp" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+
+                <MudCard Elevation="0" Class="mb-6">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">@L["Автоматизация голосований"]</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="4">
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudPaper Elevation="0" Class="pa-4" Style="height: 100%;">
+                                    <MudSwitch T="bool"
+                                               Label="@L["Автоматически считать не проголосовавших воздержавшимися"]"
+                                               @bind-Checked="Settings.AutoSetVoicelessAsAbstrainVote"
+                                               Disabled="true"
+                                               Color="Color.Primary" />
+                                    <MudText Typo="Typo.caption" Class="ml-14 mt-1" Style="color: var(--mud-palette-text-secondary);">@L["Недоступно в текущей версии"]</MudText>
+                                </MudPaper>
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudPaper Elevation="0" Class="pa-4" Style="height: 100%;">
+                                    <MudSwitch T="bool"
+                                               Label="@L["Включить автоматическое воздержание"]"
+                                               @bind-Checked="Settings.EnableAutoAbstainVote"
+                                               Disabled="true"
+                                               Color="Color.Primary" />
+                                    <MudText Typo="Typo.caption" Class="ml-14 mt-1" Style="color: var(--mud-palette-text-secondary);">@L["Недоступно в текущей версии"]</MudText>
+                                </MudPaper>
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudPaper Elevation="0" Class="pa-4" Style="height: 100%;">
+                                    <MudSwitch T="bool"
+                                               Label="@L["Автоматическое завершение просроченных голосований"]"
+                                               @bind-Checked="Settings.AutoFinishExpiredVotings"
+                                               Color="Color.Primary" />
+                                </MudPaper>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+
+                <MudCard Elevation="0">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">@L["Дополнительные параметры"]</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="4">
+                            <MudItem xs="12" sm="6">
+                                <MudNumericField T="BigInteger"
+                                                 Label="@L["Тайм-аут для вывода средств (дней)"]"
+                                                 @bind-Value="Settings.WithdrawalTimeout"
+                                                 Variant="Variant.Outlined"
+                                                 HelperText="Время ожидания перед выводом средств"
+                                                 Adornment="Adornment.Start"
+                                                 AdornmentIcon="@Icons.Material.Filled.Timer" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudSwitch T="bool"
+                                           Label="@L["Включить обнаружение мошенничества"]"
+                                           @bind-Checked="Settings.EnableFraudDetection"
+                                           Color="Color.Warning" />
+                                <MudText Typo="Typo.caption" Class="ml-14 mt-1" Style="color: var(--mud-palette-warning);">@L["Проверка подозрительных действий при голосовании"]</MudText>
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudSwitch T="bool"
+                                           Label="@L["Автоматическое распределение средств"]"
+                                           @bind-Checked="Settings.AutoDistributeConsentedFunds"
+                                           Color="Color.Primary" />
+                                <MudText Typo="Typo.caption" Class="ml-14 mt-1" Style="color: var(--mud-palette-text-secondary);">@L["Распределять средства автоматически после положительного голосования"]</MudText>
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudSwitch T="bool"
+                                           Label="@L["Автоматическая пауза"]"
+                                           @bind-Checked="Settings.AutoPauseEnabled"
+                                           Color="Color.Primary" />
+                                <MudText Typo="Typo.caption" Class="ml-14 mt-1" Style="color: var(--mud-palette-text-secondary);">@L["Приостанавливать процессы при достижении критических условий"]</MudText>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+
+            <!-- ВКЛАДКА: ПРОИЗВОДИТЕЛИ -->
+            <MudTabPanel Text="@L["Производители"]" Icon="@Icons.Material.Filled.Money">
+                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-4">@L["Настройки производителей"]</MudText>
+
+                <MudGrid Spacing="4">
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="0" Class="mb-4">
+                            <MudCardHeader>
+                                <MudText Typo="Typo.h6">@L["Базовые настройки"]</MudText>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudGrid>
+                                    <MudItem xs="12">
+                                        <MudSelect T="MilestoneFundingType"
+                                                   Label="@L["Тип финансирования"]"
+                                                   @bind-Value="Settings.DefaultFundingType"
+                                                   Variant="Variant.Outlined"
+                                                   HelperText="Выберите модель финансирования производителей">
+                                            <MudSelectItem Value="MilestoneFundingType.Before">До начала работ</MudSelectItem>
+                                            <MudSelectItem Value="MilestoneFundingType.After">После выполнения</MudSelectItem>
+                                            <MudSelectItem Value="MilestoneFundingType.Split">Раздельное (частично до и после)</MudSelectItem>
+                                        </MudSelect>
+                                    </MudItem>
+
+                                    <MudItem xs="12">
+                                        <MudNumericField T="ulong"
+                                                         Label="@L["Стандартная длительность голосования (дней)"]"
+                                                         @bind-Value="Settings.DefaultVotingDuration"
+                                                         Variant="Variant.Outlined"
+                                                         Adornment="Adornment.Start"
+                                                         AdornmentIcon="@Icons.Material.Filled.Timer" />
+                                    </MudItem>
+
+                                    <MudItem xs="12">
+                                        <MudSwitch T="bool"
+                                                   Label="@L["Разрешено поэтапное финансирование"]"
+                                                   @bind-Checked="Settings.AllowSteppedFinancing"
+                                                   Color="Color.Primary" />
+                                    </MudItem>
+                                </MudGrid>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudCard Elevation="0" Class="mb-4">
+                            <MudCardHeader>
+                                <MudText Typo="Typo.h6">@L["Финансовые ограничения"]</MudText>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudGrid>
+                                    <MudItem xs="12" sm="6">
+                                        <MudNumericField T="int"
+                                                         Label="@L["Максимальное количество производителей"]"
+                                                         @bind-Value="Settings.MaxManufacturers"
+                                                         Variant="Variant.Outlined"
+                                                         Min="1" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" sm="6">
+                                        <MudNumericField T="BigInteger"
+                                                         Label="@L["Минимальная инвестиция"]"
+                                                         @bind-Value="Settings.MinManufacturerInvestment"
+                                                         Variant="Variant.Outlined"
+                                                         Adornment="Adornment.Start"
+                                                         AdornmentText="$" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" sm="6">
+                                        <MudNumericField T="byte"
+                                                         Label="@L["Максимальное количество этапов"]"
+                                                         @bind-Value="Settings.MaxMilestoneSteps"
+                                                         Variant="Variant.Outlined"
+                                                         Min="1"
+                                                         Max="20" />
+                                    </MudItem>
+
+                                    <MudItem xs="12" sm="6">
+                                        <MudNumericField T="byte"
+                                                         Label="@L["Стандартная доля PrizeFund (%)"]"
+                                                         @bind-Value="Settings.DefaultPrizeFundAllocation"
+                                                         Variant="Variant.Outlined"
+                                                         Min="0"
+                                                         Max="100" />
+                                    </MudItem>
+                                </MudGrid>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </MudTabPanel>
+
+            <!-- ВКЛАДКА: ФИНАНСОВЫЕ НАСТРОЙКИ -->
+            <MudTabPanel Text="@L["Финансовые настройки"]" Icon="@Icons.Material.Filled.AccountBalance">
+                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-4">@L["Финансовые параметры проекта"]</MudText>
+
+                <MudCard Elevation="0">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">@L["Распределение средств"]</MudText>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="4">
+                            <MudItem xs="12" md="4">
+                                <MudPaper Elevation="2" Class="pa-4">
+                                    <MudText Typo="Typo.subtitle1" Class="mb-2">@L["Комиссия создателя"]</MudText>
+                                    <MudNumericField T="BigInteger"
+                                                     Label="@L["Процент комиссии (1%)"]"
+                                                     @bind-Value="Settings.CreatorFeePercentage"
+                                                     Variant="Variant.Outlined"
+                                                     Min="0"
+                                                     Adornment="Adornment.End"
+                                                     AdornmentText="%"
+                                                     HelperText="Процент от общей суммы в пользу создателя" />
+                                </MudPaper>
+                            </MudItem>
+
+                            <MudItem xs="12" md="4">
+                                <MudPaper Elevation="2" Class="pa-4">
+                                    <MudText Typo="Typo.subtitle1" Class="mb-2">@L["Фиксированная награда"]</MudText>
+                                    <MudNumericField T="BigInteger"
+                                                     Label="@L["Сумма вознаграждения"]"
+                                                     @bind-Value="Settings.CreatorFixedReward"
+                                                     Variant="Variant.Outlined"
+                                                     Min="0"
+                                                     Adornment="Adornment.Start"
+                                                     AdornmentText="$"
+                                                     HelperText="Фиксированная сумма для создателя" />
+                                </MudPaper>
+                            </MudItem>
+
+                            <MudItem xs="12" md="4">
+                                <MudPaper Elevation="2" Class="pa-4">
+                                    <MudText Typo="Typo.subtitle1" Class="mb-2">@L["Призовой фонд"]</MudText>
+                                    <MudNumericField T="BigInteger"
+                                                     Label="@L["Цель призового фонда"]"
+                                                     @bind-Value="Settings.FLM_PrizeFundGoal"
+                                                     Variant="Variant.Outlined"
+                                                     Min="0"
+                                                     Adornment="Adornment.Start"
+                                                     AdornmentText="$"
+                                                     HelperText="Целевая сумма для призового фонда" />
+                                </MudPaper>
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudTabPanel>
+
+            <!-- ВКЛАДКА: ВРЕМЕННЫЕ ПАРАМЕТРЫ -->
+            <MudTabPanel Text="@L["Временные параметры"]" Icon="@Icons.Material.Filled.Timer">
+                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mb-4">@L["Временные настройки и дедлайны"]</MudText>
+
+                <MudCard Elevation="0" Class="mb-4">
+                    <MudCardHeader>
+                        <MudText Typo="Typo.h6">@L["Основные дедлайны"]</MudText>
+                        <MudTooltip Text="Главные временные точки проекта">
+                            <MudIconButton Icon="@Icons.Material.Filled.Info" Color="Color.Primary" Size="Size.Small" />
+                        </MudTooltip>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="4">
+                            <MudItem xs="12" md="6" lg="3">
+                                <MudDatePicker Label="@L["Дедлайн сбора средств"]"
+                                               @bind-Value="Settings.FundraisingCompletionVotingDeadline"
+                                               Variant="Variant.Outlined"
+                                               Adornment="Adornment.End"
+                                               AdornmentIcon="@Icons.Material.Filled.Event"
+                                               PickerVariant="PickerVariant.Dialog" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6" lg="3">
+                                <MudDatePicker Label="@L["Дедлайн выбора производителя"]"
+                                               @bind-Value="Settings.ManufacturerSelectionDeadline"
+                                               Variant="Variant.Outlined"
+                                               Adornment="Adornment.End"
+                                               AdornmentIcon="@Icons.Material.Filled.Event"
+                                               PickerVariant="PickerVariant.Dialog" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6" lg="3">
+                                <MudDatePicker Label="@L["Дедлайн голосования о запуске"]"
+                                               @bind-Value="Settings.LaunchVotingDeadline"
+                                               Variant="Variant.Outlined"
+                                               Adornment="Adornment.End"
+                                               AdornmentIcon="@Icons.Material.Filled.Event"
+                                               PickerVariant="PickerVariant.Dialog" />
+                            </MudItem>
+
+                            <MudItem xs="12" md="6" lg="3">
+                                <MudDatePicker Label="@L["Дедлайн завершения сбора"]"
+                                               @bind-Value="Settings.FundraisingVotingDeadline"
+                                               Variant="Variant.Outlined"
+                                               Adornment="Adornment.End"
+                                               AdornmentIcon="@Icons.Material.Filled.Event"
+                                               PickerVariant="PickerVariant.Dialog" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+
+                <MudExpansionPanels MultiExpansion="true" Class="mt-6">
+                    <MudExpansionPanel Text="@L["Дополнительные дедлайны"]" Icon="@Icons.Material.Filled.DateRange">
+                        <MudGrid Spacing="4">
+                            <MudItem xs="12" md="6">
+                                <MudCard Elevation="0" Class="pa-2">
+                                    <MudCardContent>
+                                        <MudDatePicker Label="@L["Дедлайн голосования: завершение сбора"]"
+                                                       @bind-Value="Settings.FundraisingCompletionVotingDeadline"
+                                                       Variant="Variant.Outlined"
+                                                       Disabled="true" />
+
+                                        <MudDatePicker Class="mt-4"
+                                                       Label="@L["Дедлайн голосования: успешное закрытие"]"
+                                                       @bind-Value="Settings.SuccessfulClosureVotingDeadline"
+                                                       Variant="Variant.Outlined"
+                                                       Disabled="true" />
+
+                                        <MudDatePicker Class="mt-4"
+                                                       Label="@L["Дедлайн голосования: пауза/возобновление"]"
+                                                       @bind-Value="Settings.PauseResumeVotingDeadline"
+                                                       Variant="Variant.Outlined"
+                                                       Disabled="true" />
+                                    </MudCardContent>
+                                </MudCard>
+                            </MudItem>
+
+                            <MudItem xs="12" md="6">
+                                <MudCard Elevation="0" Class="pa-2">
+                                    <MudCardContent>
+                                        <MudDatePicker Label="@L["Дедлайн голосования выбора производителя"]"
+                                                       @bind-Value="Settings.ManufacturerSelectionVotingDeadline"
+                                                       Variant="Variant.Outlined"
+                                                       Disabled="true" />
+
+                                        <MudDatePicker Class="mt-4"
+                                                       Label="@L["Дедлайн голосования с возвратом средств"]"
+                                                       @bind-Value="Settings.TerminationWithRefundVotingDeadline"
+                                                       Variant="Variant.Outlined"
+                                                       Disabled="true" />
+
+                                        <MudDatePicker Class="mt-4"
+                                                       Label="@L["Дедлайн голосования за завершение этапа"]"
+                                                       @bind-Value="Settings.MilestoneCompletionVotingDeadline"
+                                                       Variant="Variant.Outlined"
+                                                       Disabled="true" />
+                                    </MudCardContent>
+                                </MudCard>
+                            </MudItem>
+                        </MudGrid>
+                    </MudExpansionPanel>
+
+                    <MudExpansionPanel Text="@L["Системные параметры"]" Icon="@Icons.Material.Filled.Settings" Expanded="false">
+                        <MudAlert Severity="Severity.Info" Class="my-2">@L["Системные временные настройки определяются автоматически на основе указанных выше параметров"]</MudAlert>
+                    </MudExpansionPanel>
+                </MudExpansionPanels>
+            </MudTabPanel>
+        </MudTabs>
+
+        <!-- Нижняя панель с кнопками -->
+        <MudDivider Class="my-4" />
+        <MudStack Row="true" Spacing="2" Justify="Justify.FlexEnd" Class="mt-4">
+            <MudTooltip Text="Сбросить все настройки к значениям по умолчанию">
+                <MudButton OnClick="Reset"
+                           Color="Color.Secondary"
+                           Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Refresh">@L["Сбросить"]</MudButton>
+            </MudTooltip>
+
+            <MudTooltip Text="Сохранить настройки без закрытия диалога">
+                <MudButton OnClick="Save"
+                           Color="Color.Primary"
+                           Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Save">@L["Сохранить"]</MudButton>
+            </MudTooltip>
+
+            <MudTooltip Text="Сохранить настройки и закрыть диалог">
+                <MudButton OnClick="Ok"
+                           Color="Color.Success"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.Check">@L["ОК"]</MudButton>
+            </MudTooltip>
+        </MudStack>
+    </MudPaper>
+</MudForm>
+
+
+
+
+@code
+{
+
+
+    [Parameter] public ProjectSettings Settings { get; set; } = new();
+
+    private MudForm _form;
+
+    private async Task Save()
+    {
+        await _form.Validate();
+
+
+        if (_form.IsValid)
+        {
+            // Логика сохранения
+        }
+
+    }
+
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; }
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    BaseActorModelDto BaseActor = new();
+
+    [CascadingParameter] public MainUserData ActorsModels { get; set; } = default!;
+
+    public bool IsSuccessLoaded { get; set; } = false;
+
+    // Флаги, чтобы инициализация выполнялась только один раз
+    private bool _parametersInitialized = false;
+    private bool _dataLoaded = false;
+    protected override async Task OnParametersSetAsync()
+    {
+        // Если каскадный параметр не установлен, пытаемся его загрузить
+        if (ActorsModels == null)
+        {
+            try
+            {
+                ActorsModels = await _currentUserService.RetrieveActorsModels();
+            }
+            catch (Exception ex)
+            {
+                return;
+            }
+        }
+
+        // Если ActorsModels успешно загружен, инициализируем связанные данные
+        if (!_parametersInitialized && ActorsModels != null)
+        {
+            _parametersInitialized = true;
+
+            if (ActorsModels.BaseActorModelId != Guid.Empty)
+            {
+                BaseActor = ActorsModels.BaseActorDtoModel;
+            }
+
+            // После инициализации параметров загружаем данные страницы
+            await InitializeDataAsync();
+        }
+    }
+
+    private async Task InitializeDataAsync()
+    {
+        // Защита от повторной загрузки данных
+        if (_dataLoaded)
+            return;
+
+        // Здесь можно выставить IsSuccessLoaded = false, если нужно показать процесс загрузки
+        IsSuccessLoaded = false;
+
+        try
+        {
+
+            // Если все данные успешно загружены, устанавливаем флаг
+            _dataLoaded = true;
+            IsSuccessLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Ошибка загрузки данных: " + ex.Message);
+            // Здесь можно добавить дополнительную обработку ошибки
+        }
+    }
+
+    // Если нет необходимости разделять логику, можно не использовать OnInitializedAsync,
+    // либо оставить для другой инициализации, не зависящей от параметров.
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        // Можно оставить пустым, если вся инициализация перенесена в OnParametersSetAsync
+    }
+    ////////////////////////////////////////////////////////////////
+
+    private string LicenseText;
+
+    private void Ok()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+    private void Reset(MouseEventArgs args)
+    {
+        throw new NotImplementedException();
+    }
+}

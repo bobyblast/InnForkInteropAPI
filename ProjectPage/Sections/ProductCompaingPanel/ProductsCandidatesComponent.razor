@@ -1,0 +1,1778 @@
+
+ @inject IStringLocalizer<ProductsCandidatesComponent> L
+@using InnFork.Blockchain.NEO3
+@using InnFork.Domain.AnemicModels.App.Voting
+@using InnFork.NeoN3
+@using InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs
+@using InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Sections.Roadmap
+@using InnFork.Server.UI.Services.BlockChain.NeoN3
+
+@using InnFork.Server.UI.Services.BlockChain.WalletConnect
+@using Microsoft.Extensions.DependencyInjection
+@using InnFork.Application.Common.Mappings
+@using InnFork.Application.Features.BaseActorModels.DTOs
+@using InnFork.Application.Features.Manufacturers.DTOs
+@using InnFork.Application.Features.ProductOffers.DTOs
+@using InnFork.Domain.Entities.AnemicModels.Actors
+@using InnFork.Server.UI.Pages.ProjectEnv.ProjectPage.Dialogs
+@using System.Numerics
+@using Neo
+
+
+
+
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="3">
+            <MudPaper Class="pa-3" Elevation="1" Style="height: 100%;">
+                <MudText Typo="Typo.h6" GutterBottom="true" Class="mb-3">@L["Manufacturer Candidates"]</MudText>
+                @if (model_manufacturersDtos != null && model_manufacturersDtos.Any())
+                {
+                    <MudNavMenu Dense="true" Rounded="true" Color="Color.Primary">
+                        @foreach (ManufacturerDto manu_model in model_manufacturersDtos)
+                        {
+                            <MudNavLink OnClick="@(async () => await SelectManufacturer(manu_model))"
+                                        Style="@(currentManufacturer == manu_model ? "background-color: var(--mud-palette-action-default-hover);" : "")"
+                                        Icon="@Icons.Material.Filled.Factory">
+                                <div class="d-flex flex-column w-100">
+                                    <MudText Typo="Typo.body1">@manu_model.ManufacturerName</MudText>
+                                    <MudProgressLinear Color="GetManufacturerProgressColor(manu_model)" Value="GetManufacturerProgress(manu_model)" Class="my-1"></MudProgressLinear>
+                                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Info">@L["Votes:"] @GetVotesForManufacturer(manu_model)</MudChip>
+                                        @if (IsTopCandidate(manu_model)) {
+                                            <MudChip T="string" Icon="@Icons.Material.Filled.Star" Size="Size.Small" Color="Color.Warning">@L["Top Candidate"]</MudChip>
+                                        }
+                                    </MudStack>
+                                </div>
+                            </MudNavLink>
+                            <MudDivider Class="my-1" />
+                        }
+                    </MudNavMenu>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Class="mt-3">@L["No manufacturer candidates to display at the moment."]</MudAlert>
+                }
+                <MudButton FullWidth="true" Style="margin-top: 24px;" OnClick="@BecomeManufacturer" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AddBusiness" Size="Size.Large">@L["Become a Manufacturer"]</MudButton>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="9">
+            <MudPaper Class="pa-4" Elevation="1" Style="min-height: 100%;">
+                @if (currentManufacturer != null && currentProductOffer != null)
+                {
+                    <MudToolBar   Dense="true" Class="mb-2" Style="flex-wrap: wrap; background-color: var(--mud-palette-surface); border-radius: var(--mud-shape-borderRadius); padding: 8px;">
+                        <MudAvatar Color="Color.Primary" Size="Size.Medium" Class="mr-3">@currentManufacturer.ManufacturerName?.FirstOrDefault()</MudAvatar>
+                        <MudText Typo="Typo.h5" Color="Color.Primary" Class="mr-auto">@currentManufacturer.ManufacturerName</MudText>
+                        
+                        <MudTooltip Text="@L["Product & Rewards"]"><MudIconButton Icon="@Icons.Material.Filled.CardGiftcard" OnClick="@(() => SelectedPage = "ProductsRewards")" Color="@(SelectedPage == "ProductsRewards" ? Color.Primary : Color.Default)" Size="Size.Large"  /></MudTooltip>
+                        <MudTooltip Text="@L["Story"]"><MudIconButton Icon="@Icons.Material.Filled.AutoStories" OnClick="@(() => SelectedPage = "ProductStories")" Color="@(SelectedPage == "ProductStories" ? Color.Primary : Color.Default)" Size="Size.Large"  /></MudTooltip>
+                        <MudTooltip Text="@L["Reviews"]"><MudIconButton Icon="@Icons.Material.Filled.Reviews" OnClick="@(() => SelectedPage = "ProductReview")" Color="@(SelectedPage == "ProductReview" ? Color.Primary : Color.Default)" Size="Size.Large" /></MudTooltip>
+                        <MudTooltip Text="@L["Updates"]"><MudIconButton Icon="@Icons.Material.Filled.Campaign" OnClick="@(() => SelectedPage = "Updates")" Color="@(SelectedPage == "Updates" ? Color.Primary : Color.Default)"  Size="Size.Large" /></MudTooltip>
+                        <MudTooltip Text="@L["Comments"]"><MudIconButton Icon="@Icons.Material.Filled.Comment" OnClick="@(() => SelectedPage = "Comments")" Color="@(SelectedPage == "Comments" ? Color.Primary : Color.Default)" Size="Size.Large"  /></MudTooltip>
+                        <MudTooltip Text="@L["Timeline"]"><MudIconButton Icon="@Icons.Material.Filled.Timeline" OnClick="@(() => SelectedPage = "Timeline")" Color="@(SelectedPage == "Timeline" ? Color.Primary : Color.Default)"  Size="Size.Large" /></MudTooltip>
+                        <MudTooltip Text="@L["Investors"]"><MudIconButton Icon="@Icons.Material.Filled.People" OnClick="@(() => SelectedPage = "Investors")" Color="@(SelectedPage == "Investors" ? Color.Primary : Color.Default)"  Size="Size.Large" /></MudTooltip>
+                        <MudTooltip Text="@L["Risks"]"><MudIconButton Icon="@Icons.Material.Filled.Report" OnClick="@(() => SelectedPage = "Risks")" Color="@(SelectedPage == "Risks" ? Color.Primary : Color.Default)" Size="Size.Large" /></MudTooltip>
+                        <MudTooltip Text="@L["Commitments"]"><MudIconButton Icon="@Icons.Material.Filled.AssignmentTurnedIn" OnClick="@(() => SelectedPage = "Commitments")" Color="@(SelectedPage == "Commitments" ? Color.Primary : Color.Default)" Size="Size.Large"  /></MudTooltip>
+                        <MudTooltip Text="@L["Links"]"><MudIconButton Icon="@Icons.Material.Filled.Link" OnClick="@(() => SelectedPage = "Links")" Color="@(SelectedPage == "Links" ? Color.Primary : Color.Default)"  Size="Size.Large" /></MudTooltip>
+                        <MudTooltip Text="@L["Faq"]"><MudIconButton Icon="@Icons.Material.Filled.Quiz" OnClick="@(() => SelectedPage = "Faq")" Color="@(SelectedPage == "Faq" ? Color.Primary : Color.Default)"  Size="Size.Large" /></MudTooltip>
+                        <MudTooltip Text="@L["Voting"]"><MudIconButton Icon="@Icons.Material.Filled.HowToVote" OnClick="@(() => SelectedPage = "Voting")" Color="@(SelectedPage == "Voting" ? Color.Primary : Color.Default)" Size="Size.Large"  /></MudTooltip>
+                    </MudToolBar>
+                    <MudDivider Class="my-3"/>
+
+                    <div class="mt-4 pa-2" style="max-height: calc(100vh - 280px); overflow-y: auto;">
+                        @switch (SelectedPage)
+                        {
+                            case "ProductStories":
+                                <MudPaper Elevation="0">
+                                
+                                    @if (currentProductOffer?.ProductStories != null)
+                                    {
+                                        @foreach (var StoryBlock in currentProductOffer?.ProductStories)
+                                        {
+                                            <MudPaper Class="pa-6" MaxWidth="1200px" Width="800px" Elevation="0">
+                                
+                                                <MudCard Elevation="0">
+                                
+                                                    <MudCardContent>
+                                
+                                                        <MudText Typo="Typo.h3">@StoryBlock.Title</MudText>
+                                
+                                                        <MudItem xs="12" md="6">
+                                                            <MudImage Src="@StoryBlock.ImageSrc" Height="600" Style="border-radius: 5px 5px 5px 5px; " />
+                                                        </MudItem>
+                                
+                                                        @if (@StoryBlock.VideoSrc != null && @StoryBlock.VideoSrc.Length > 10)
+                                                        {
+                                                            <MudItem xs="12" md="6">
+                                                                @* <StoryMediaComponent Src=@StoryBlock.VideoSrc AutoPlay="false" /> *@ @*Assuming StoryMediaComponent is defined*@
+                                                                <video width="100%" height="auto" controls poster="@StoryBlock.ImageSrc">
+                                                                    <source src="@StoryBlock.VideoSrc" type="video/mp4">
+                                                                    @L["Your browser does not support the video tag."]
+                                                                </video>
+                                                            </MudItem>
+                                                        }
+                                
+                                
+                                                        <MudItem Class="pa-2">
+                                                            <MudText>@StoryBlock.Paragraph1</MudText>
+                                                        </MudItem>
+                                
+                                                        <MudDivider />
+                                
+                                                        <MudItem Class="pa-2">
+                                                            <MudText>@StoryBlock.Paragraph2</MudText>
+                                                        </MudItem>
+                                
+                                                        <MudDivider />
+                                
+                                                        <MudItem Class="pa-2">
+                                                            <MudText>@StoryBlock.Paragraph3</MudText>
+                                                        </MudItem>
+                                
+                                                    </MudCardContent>
+                                                </MudCard>
+                                            </MudPaper>
+                                        }
+                                    }
+                                
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="ml-n2 mb-n2" OnClick="@(async () => await CreateStoryBlock())">@L["Add Story"]</MudButton>
+                                
+                                </MudPaper>
+                                break;
+                            case "ProductsRewards":
+                                @if (currentProductOffer?.ProductRewards?.Count > 0)
+                                {
+                                    <MudGrid>
+                                
+                                        @foreach (RewardModel reward in currentProductOffer.ProductRewards)
+                                        {
+                                            <MudItem xs="12" sm="6" md="4"> @* Adjusted grid size for better responsiveness *@
+                                
+                                                <MudPaper Class="pa-4" Elevation="2" Style="height:100%"> @* Added elevation and full height *@
+                                
+                                                    <MudGrid>
+                                
+                                                        <MudItem xs="12"> @* Full width for this section *@
+                                                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mb-2">@reward.Cost$ (@reward?.Discount% @L["OFF"])</MudButton>
+                                                        </MudItem>
+                                
+                                                        <MudItem xs="12" Class="d-flex justify-space-between"> @* Chips on one line *@
+                                                            <MudChip T="string" Icon="@Icons.Material.Filled.ProductionQuantityLimits" Color="Color.Secondary" Variant="Variant.Outlined">@L["Available:"] @reward.LimitedQuantity</MudChip>
+                                                            <MudChip T="string" Icon="@Icons.Material.Filled.AllInbox" Color="Color.Tertiary" Variant="Variant.Outlined">@L["Pack: X"]@reward.PackageQuantity</MudChip>
+                                                        </MudItem>
+                                
+                                                    </MudGrid>
+                                
+                                                    <MudText Typo="Typo.h6" GutterBottom="true" Class="mt-3">@reward?.Title</MudText>
+                                
+                                                    <MudItem Class="d-flex align-center gap-2 mb-2"> @* Adjusted gap *@
+                                                        <MudRating ReadOnly="true" SelectedValue="4" Size="Size.Small" />
+                                                        <MudLink Href="#" Typo="Typo.caption" Color="Color.Primary">@L["See all 137 reviews"]</MudLink> @* Made it a link *@
+                                                        <MudText Typo="Typo.caption">@L["Backers:"] @reward?.Backers</MudText>
+                                                    </MudItem>
+                                
+                                                    <MudImage Src="@reward.ImageSrc" Height="200" ObjectFit="ObjectFit.Cover" Fluid="true" Class="rounded-lg mb-2" /> @* Adjusted height and added cover fit *@
+                                
+                                                    <MudText Typo="Typo.body2" Class="mb-1">@L["Estimated Delivery:"] @reward?.EstimatedDelivery.ToShortDateString()</MudText>
+                                
+                                                    @if (reward?.ShipsToCountriesList?.Any() == true)
+                                                    {
+                                                        <MudText Typo="Typo.caption" Class="mb-2">@L["Ships to:"] @string.Join(", ", reward.ShipsToCountriesList)</MudText>
+                                                    }
+                                
+                                                    <MudDivider Class="my-2" />
+                                
+                                                    <MudText Typo="Typo.body2" Class="mb-2">@reward.Description</MudText>
+                                
+                                                    @if (reward?.OptionalRewardAddons?.Any() == true)
+                                                    {
+                                                        <MudDivider Class="my-2" />
+                                                        <MudText Typo="Typo.subtitle2" GutterBottom="true">@L["Optional Add-ons"]</MudText>
+                                                        <MudExpansionPanels Dense="true">
+                                                            @foreach (RewardModel.RewardOptionalAddon Addon in reward.OptionalRewardAddons)
+                                                            {
+                                                                <MudExpansionPanel Text="@((Addon.Title) +(Addon.AdditionalPrice.ToString()))">
+                                                                    <MudText Typo="Typo.body2">@L["Includes:"] @Addon.Description</MudText>
+                                                                    @if (!string.IsNullOrEmpty(Addon.ImageSrc))
+                                                                    {
+                                                                        <MudImage Src="@Addon.ImageSrc" Height="100" ObjectFit="ObjectFit.Contain" Fluid="true" Class="rounded-lg my-2" />
+                                                                    }
+                                                                    <MudChip T="string" Label="true" Size="Size.Small">@L["Pack: X"]@Addon.AddonQuantity</MudChip>
+                                                                </MudExpansionPanel>
+                                                            }
+                                                        </MudExpansionPanels>
+                                                    }
+                                                </MudPaper>
+                                            </MudItem>
+                                        }
+                                    </MudGrid>
+                                }
+                                else
+                                {
+                                    <MudAlert Severity="Severity.Info">@L["No rewards available for this product offer yet."]</MudAlert>
+                                }
+                                
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="ShowAddRewardDialog" StartIcon="@Icons.Material.Filled.Add">@L["Add New Reward"]</MudButton>
+                                break;
+                            case "ProductReview":
+                                <MudPaper Elevation="0">
+                                    @if (currentProductOffer?.ProductReviews?.Any() == true)
+                                    {
+                                        <MudGrid>
+                                            @foreach (ReviewModel review in currentProductOffer.ProductReviews)
+                                            {
+                                                <MudItem xs="12" md="6" lg="4">
+                                                    <MudCard Elevation="2">
+                                                        <MudCardHeader>
+                                                            @if (!string.IsNullOrEmpty(review.CreatorAvatar))
+                                                            {
+                                                                <MudAvatar Image="@review.CreatorAvatar" />
+                                                            }
+                                                            else
+                                                            {
+                                                                <MudAvatar Color="Color.Secondary"></MudAvatar>
+                                                            }
+                                                            <MudText Typo="Typo.body1" Class="ml-2">@L"Creator Id" @review.BaseActorModel_CreatorId.ToString()</MudText>
+                                                            <MudSpacer />
+                                                            <MudRating SelectedValue="review.Rating" ReadOnly="true" Size="Size.Small" />
+                                                        </MudCardHeader>
+                                                        <MudCardContent>
+                                                            <MudText Typo="Typo.h6" GutterBottom="true">@review.Title</MudText>
+                                                            <MudText Typo="Typo.body2">@((MarkupString)review.Content)</MudText>
+                                                            @if (review.Tags != null && review.Tags.Any())
+                                                            {
+                                                                <div class="mt-2">
+                                                                    @foreach (var Tag in review.Tags)
+                                                                    {
+                                                                        <MudChip T="string" Label="true" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary">@Tag</MudChip>
+                                                                    }
+                                                                </div>
+                                                            }
+                                                        </MudCardContent>
+                                                        <MudCardActions>
+                                                            <MudText Typo="Typo.caption">@review.PublishDate.ToShortDateString()</MudText>
+                                                        </MudCardActions>
+                                                    </MudCard>
+                                                </MudItem>
+                                            }
+                                        </MudGrid>
+                                    }
+                                    else
+                                    {
+                                        <MudAlert Severity="Severity.Info">@L["No reviews yet for this product offer."]</MudAlert>
+                                    }
+                                </MudPaper>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="ReviewDialog" StartIcon="@Icons.Material.Filled.AddComment">@L["Add Review"]</MudButton>
+                                break;
+                            case "Updates":
+                                <MudPaper Elevation="0">
+                                    @if (currentProductOffer?.ProductUpdates?.Any() == true)
+                                    {
+                                        <MudTimeline TimelinePosition="TimelinePosition.Alternate" TimelineAlign="TimelineAlign.Start">
+                                            @foreach (var update in currentProductOffer.ProductUpdates.OrderByDescending(u => u.PublishDate))
+                                            {
+                                                <MudTimelineItem Color="Color.Primary" Icon="@Icons.Material.Filled.Campaign">
+                                                    <MudCard Elevation="2">
+                                                        <MudCardHeader>
+                                                            <MudText Typo="Typo.h6">@update.Title</MudText>
+                                                            <MudSpacer />
+                                                            <MudText Typo="Typo.caption">@update.PublishDate.ToString("g")</MudText>
+                                                        </MudCardHeader>
+                                                        <MudCardContent>
+                                                            <MudText Typo="Typo.subtitle1" GutterBottom="true">@update.Subtitle</MudText>
+                                                            <MudText Typo="Typo.body2" Class="mb-2">@update.RichTextParagraph</MudText>
+                                                            @if (!string.IsNullOrEmpty(update.video))
+                                                            {
+                                                                <MudCarousel TData="string" ShowArrows="true" AutoCycle="false" Class="rounded-lg mb-2" Style="height: 300px;">
+                                                                    <MudCarouselItem Video="@update.video" Poster="@update.videoPoster" />
+                                                                </MudCarousel>
+                                                            }
+                                                        </MudCardContent>
+                                                        <MudCardActions Class="d-flex justify-space-between">
+                                                            <MudText Typo="Typo.caption">@L["Likes:"] @update.likesCount</MudText>
+                                                            <MudText Typo="Typo.caption">@L["Comments:"] @update.commentsCount</MudText>
+                                                            @if(!string.IsNullOrEmpty(update.readMoreText))
+                                                            {
+                                                                <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@update.readMoreText" Target="_blank">@update.readMoreText</MudButton>
+                                                            }
+                                                        </MudCardActions>
+                                                    </MudCard>
+                                                </MudTimelineItem>
+                                            }
+                                        </MudTimeline>
+                                    }
+                                    else
+                                    {
+                                        <MudAlert Severity="Severity.Info">@L["No updates posted yet for this product offer."]</MudAlert>
+                                    }
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="AddUpdatePost" StartIcon="@Icons.Material.Filled.AddCircleOutline">@L["Add Update"]</MudButton>
+                                </MudPaper>
+                                break;
+                            case "Comments":
+                                <MudPaper Elevation="0">
+                                    @if (currentProductOffer?.ProductComments?.Any() == true)
+                                    {
+                                        <MudList T="string" Class="pa-0">
+                                            @foreach (var comment in currentProductOffer.ProductComments.OrderByDescending(c => c.PublishDate))
+                                            {
+                                                <MudListItem Class="px-0 py-2">
+                                                    <MudPaper Elevation="1" Class="pa-3 rounded" Style="width:100%;">
+                                                        <MudStack Row="true" AlignItems="AlignItems.Start">
+                                                            <MudAvatar Color="Color.Info" Size="Size.Medium" Class="mr-3">@comment.UserName?.FirstOrDefault()</MudAvatar>
+                                                            <MudStack Spacing="0" Style="flex-grow:1;">
+                                                                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                                                    <MudText Typo="Typo.body1" Style="font-weight:500;">@comment.UserName</MudText>
+                                                                    <MudText Typo="Typo.caption">@comment.PublishDate.ToString("g")</MudText>
+                                                                </MudStack>
+                                                                @if (!string.IsNullOrEmpty(comment.UserRole))
+                                                                {
+                                                                    <MudChip T="string" Label="true" Size="Size.Small" Color="Color.Success" Variant="Variant.Text" Class="pa-0 ma-0" Style="height:auto;">@comment.UserRole</MudChip>
+                                                                }
+                                                                <MudText Typo="Typo.body2" Class="mt-1">@comment.CommentText</MudText>
+                                                            </MudStack>
+                                                        </MudStack>
+                                                        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-1">
+                                                             <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Reply">@L["Reply"]</MudButton>
+                                                        </MudStack>
+                                                    </MudPaper>
+                                                </MudListItem>
+                                                <MudDivider />
+                                            }
+                                        </MudList>
+                                    }
+                                    else
+                                    {
+                                        <MudAlert Severity="Severity.Info">@L["No comments yet. Be the first to comment!"]</MudAlert>
+                                    }
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="ShowPostCommentDialog" StartIcon="@Icons.Material.Filled.AddComment">@L["Add Comment"]</MudButton>
+                                </MudPaper>
+                                break;
+                         
+                                
+                                
+                                <!-- ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// -->
+                                           
+                            
+                                case "Timeline":
+
+                                <!-- Карточки производителей -->
+                      
+                              
+                                    <MudPaper Elevation="0">
+                              
+                                        @if (ManufacturerOptions?.Any() == true)                
+                                        {             
+                                            @foreach (var manufacturer in ManufacturerOptions)
+                                            {
+                                                <MudItem xs="12">
+                                                    <MudCard Elevation="3" Class="mb-4">
+                                                        <MudCardHeader>
+                                                            <MudText Typo="Typo.h6">@L["Производитель:"] @manufacturer.Substring(0, 4)</MudText>
+                                                        </MudCardHeader>
+                                                        <MudCardContent>
+                                                            <MudGrid>
+                                                                <!-- Изображение или логотип производителя -->
+                                                                <MudItem xs="12" sm="3">
+                                                                    <MudPaper Width="170px" Height="170px" Elevation="0" Outlined="true" Class="d-flex justify-center align-center">
+                                                                        <MudIcon Icon="@Icons.Material.Filled.Factory" Size="Size.Large" />
+                                                                    </MudPaper>
+                                                                </MudItem>
+
+                                                                <!-- Таймлайн с датами и суммами -->
+                                                                <MudItem xs="12" sm="9">
+                                                                    <MudText Typo="Typo.body1" Class="mb-2">@L["График проекта:"]</MudText>
+                                                                    <MudTimeline TimelineOrientation="TimelineOrientation.Horizontal" TimelinePosition="TimelinePosition.Alternate" 
+                                                                    TimelineAlign="TimelineAlign.Start">
+
+                                                                        @for (int x = 0; x != 5; x++)
+                                                                        {
+                                                                            <MudTimelineItem  Color="Color.Warning" Variant="Variant.Filled">
+
+                                                                                <ItemContent>
+                                                                                    <MudAlert Severity="Severity.Warning">@L["Начало"]</MudAlert>
+                                                                                </ItemContent>
+
+                                                                                <ItemOpposite>
+                                                                                    <MudText Typo="Typo.body1">20.04.2024</MudText>
+                                                                                    <MudText Typo="Typo.caption">"100000 $"</MudText>
+                                                                                </ItemOpposite>
+
+                                                                            </MudTimelineItem>
+                                                                        }
+
+                                                                    </MudTimeline>
+
+                                                                    <MudGrid Class="mt-4">
+                                                                        <MudItem xs="6">
+                                                                            <MudText Typo="Typo.subtitle2">@L["Тип оплаты:"] <MudChip T="string" Size="Size.Small" Color="Color.Success">после</MudChip></MudText>
+                                                                        </MudItem>
+                                                                        <MudItem xs="6">
+                                                                            <MudText Typo="Typo.subtitle2">@L["Дедлайн: 30.04.2024"]</MudText>
+                                                                        </MudItem>
+                                                                    </MudGrid>
+                                                                </MudItem>
+                                                            </MudGrid>
+
+                                                            <!-- Блок голосования -->
+                                                            <MudDivider Class="my-3" />
+                                                            <MudGrid>
+                                                                <MudItem xs="12" sm="4">
+                                                                    <MudText Typo="Typo.body1">@L["За: 260 (85%)"]</MudText>
+                                                                    <MudProgressLinear Value="85" Vertical=false Color="Color.Success" Class="my-2" />
+                                                                </MudItem>
+                                                                <MudItem xs="12" sm="4">
+                                                                    <MudText Typo="Typo.body1">@L["Против: 30 (10%)"]</MudText>
+                                                                    <MudProgressLinear Value="10" Vertical="false" Color="Color.Error" Class="my-2" />
+                                                                </MudItem>
+                                                                <MudItem xs="12" sm="4">
+                                                                    <MudText Typo="Typo.body1">@L["Воздержались: 15 (5%)"]</MudText>
+                                                                    <MudProgressLinear Vertical="false" Value="5" Color="Color.Info" Class="my-2" />
+                                                                </MudItem>
+                                                            </MudGrid>
+
+                                                            <!-- Кнопки голосования -->
+                                                            <MudGrid Class="mt-3">
+                                                                <MudItem xs="12">
+                                                                    <MudText Typo="Typo.subtitle1" Class="mb-2">@L["Ваш голос:"]</MudText>
+                                                                    <MudPaper Elevation="0" Class="d-flex justify-center gap-2 py-2">
+                                                                        <MudButton Variant="Variant.Filled" Color="Color.Success" Class="px-6"
+                                                                                   OnClick="@(() => ManufacturerSelectionVoteChoice = BackerVotesEnum.Positive)">@L["ДА"]</MudButton>
+                                                                        <MudButton Variant="Variant.Outlined" Color="Color.Error" Class="px-6"
+                                                                                   OnClick="@(() => ManufacturerSelectionVoteChoice = BackerVotesEnum.Negative)">@L["НЕТ"]</MudButton>
+                                                                        <MudButton Variant="Variant.Outlined" Color="Color.Default" Class="px-6"
+                                                                                   OnClick="@(() => ManufacturerSelectionVoteChoice = BackerVotesEnum.Abstained)">@L["ВОЗДЕРЖАТЬСЯ"]</MudButton>
+                                                                    </MudPaper>
+                                                                </MudItem>
+                                                            </MudGrid>
+                                                        </MudCardContent>
+                                                        <MudCardActions>
+                                                            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                                                       OnClick="@(() => CallVoteManufacturerWinnerSelection())">@L["Проголосовать"]</MudButton>
+                                                        </MudCardActions>
+                                                    </MudCard>
+                                                </MudItem>
+                                            }
+                                        }                                    
+                                        else                                    
+                                        {                                        
+                                            <MudAlert Severity="Severity.Info">@L["No Manufacturer's roadmap timelines yet!"]</MudAlert>                                    
+                                        }
+
+                                    </MudPaper>
+                              
+                                break;
+                        
+                                
+
+
+
+
+
+
+
+
+
+
+                                case "Investors":
+                              @*    <MudPaper Elevation="0">
+                                    @if (_manufacturerService?.Investors?.Any() == true)
+                                    {
+                                        <MudList T="string" Dense="true">
+                                            @foreach (var investor in currentProductOffer.Investors)
+                                            {
+                                                <MudListItem Icon="@Icons.Material.Filled.MonetizationOn">
+                                                    <MudStack Row="true" Justify="Justify.SpaceBetween" Style="width:100%;">
+                                                        <MudText Typo="Typo.body1">@investor.InvestorName</MudText>
+                                                        <MudText Typo="Typo.body2" Color="Color.Success">@L["Invested:"] @investor.AmountInvested.ToString("C")</MudText>
+                                                    </MudStack>
+                                                </MudListItem>
+                                                <MudDivider />
+                                            }
+                                        </MudList>
+                                    }
+                                    else
+                                    {
+                                        <MudAlert Severity="Severity.Info">@L["No investor information available for this product offer."]</MudAlert>
+                                    }
+                                </MudPaper> *@
+                                break; 
+                      
+                                
+                                case "Risks":
+                               <MudPaper Elevation="0">
+                                   @if (currentProductOffer?.ProductRisks?.Any() == true)
+                                   {
+                                       <MudGrid Spacing="3">
+                                           @foreach (var risk in currentProductOffer.ProductRisks)
+                                           {
+                                               <MudItem xs="12" sm="6" md="4">
+                                                   <MudCard Elevation="2">
+                                                       <MudCardHeader>
+                                                           <MudText Typo="Typo.h6" Color="Color.Error">@risk.RiskTitle</MudText>
+                                                       </MudCardHeader>
+                                                       <MudCardContent>
+                                                           <MudText Typo="Typo.body2" Class="mb-2">@risk.RiskDescription</MudText>
+                                                           <MudText Typo="Typo.caption" Class="d-block mb-1">@L["Probability:"]</MudText>
+                                                           <MudProgressLinear Value="risk.Probability" Color="Color.Warning" Class="mb-2" />
+                                                           <MudText Typo="Typo.caption">@L["Impact Level:"] @risk.ImpactLevel</MudText>
+                                                       </MudCardContent>
+                                                   </MudCard>
+                                               </MudItem>
+                                           }
+                                       </MudGrid>
+                                   }
+                                   else
+                                   {
+                                       <MudAlert Severity="Severity.Info">@L["No risks identified or listed for this product offer."]</MudAlert>
+                                   }
+                                   <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="AddRiskPost" StartIcon="@Icons.Material.Filled.AddAlert">@L["Add Risk"]</MudButton>
+                               </MudPaper>
+                                break;
+                            case "Commitments":
+                                <MudPaper Elevation="0">
+                                    @if (currentProductOffer?.ProductCommitments?.Any() == true)
+                                    {
+                                        <MudList T="string" Dense="true">
+                                            @foreach (var commitment in currentProductOffer.ProductCommitments)
+                                            {
+                                                <MudListItem Icon="@Icons.Material.Filled.CheckCircleOutline" IconColor="Color.Success">
+                                                    <MudStack Spacing="0">
+                                                        <MudText Typo="Typo.h6">@commitment.CommitmentTitle</MudText>
+                                                        <MudText Typo="Typo.body2" Class="mb-1">@commitment.CommitmentDescription</MudText>
+                                                        <MudText Typo="Typo.caption">@L["Type:"] @commitment.Type</MudText>
+                                                    </MudStack>
+                                                </MudListItem>
+                                                <MudDivider />
+                                            }
+                                        </MudList>
+                                    }
+                                    else
+                                    {
+                                        <MudAlert Severity="Severity.Info">@L["No commitments listed for this product offer."]</MudAlert>
+                                    }
+                                   <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="ShowAddCommitmentDialog" StartIcon="@Icons.Material.Filled.PlaylistAddCheck">@L["Add Commitment"]</MudButton>
+                               </MudPaper>
+                                break;
+                            case "Links":
+                                <MudPaper Elevation="0">
+                                    @if (currentProductOffer?.ProductLinks?.Any() == true)
+                                    {
+                                        <MudList T="string" Dense="true">
+                                            @foreach (var link in currentProductOffer.ProductLinks)
+                                            {
+                                                <MudListItem Icon="@Icons.Material.Filled.Link" Href="@link.LinkPath" Target="_blank">
+                                                    <MudText Typo="Typo.body1" Color="Color.Primary">@link.LinkTitle</MudText>
+                                                </MudListItem>
+                                                <MudDivider />
+                                            }
+                                        </MudList>
+                                    }
+                                    else
+                                    {
+                                        <MudAlert Severity="Severity.Info">@L["No external links provided for this product offer."]</MudAlert>
+                                    }
+                                   <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="ShowAddLinkDialog" StartIcon="@Icons.Material.Filled.AddLink">@L["Add Link"]</MudButton>
+                               </MudPaper>
+                                break;
+                            case "Faq":
+                                <MudPaper Elevation="0">
+                                    @if (currentProductOffer?.ProductFaq?.Any() == true)
+                                    {
+                                        <MudExpansionPanels MultiExpansion="true">
+                                            @foreach (var faqItem in currentProductOffer.ProductFaq)
+                                            {
+                                                <MudExpansionPanel Text="@faqItem.Question" IsInitiallyExpanded="false">
+                                                    <MudText Typo="Typo.body1">@faqItem.Answer</MudText>
+                                                </MudExpansionPanel>
+                                            }
+                                        </MudExpansionPanels>
+                                    }
+                                    else
+                                    {
+                                        <MudAlert Severity="Severity.Info">@L["No frequently asked questions available for this product offer."]</MudAlert>
+                                    }
+                                   <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4" OnClick="ShowAddFaqDialog" StartIcon="@Icons.Material.Filled.Quiz">@L["Add FAQ"]</MudButton>
+                               </MudPaper>
+                                break;
+                            case "Voting":
+                          @*        <VotingComponent Manufacturer="currentManufacturer" ProductOffer="currentProductOffer" />  *@
+                                <MudAlert Severity="Severity.Warning">@L["Voting component for candidates is not yet implemented."]</MudAlert>
+                                break;
+                            default:
+                                <MudAlert Severity="Severity.Info">@L["Select a section to view details."]</MudAlert>
+                                break;
+                        }
+                    </div>
+                }
+                else
+                {
+                    <MudPaper Elevation="0" Class="d-flex flex-column justify-center align-center" Style="height: 400px;">
+                        <MudIcon Icon="@Icons.Material.Filled.Inbox" Size="Size.Large" Color="Color.Primary" Class="mb-4" />
+                        <MudText Typo="Typo.h6" Align="Align.Center">@L["Select a Manufacturer Candidate"]</MudText>
+                        <MudText Typo="Typo.body1" Align="Align.Center" Class="mt-2">@L["Choose a candidate from the list on the left to see their product proposal and other details."]</MudText>
+                    </MudPaper>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+
+
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject NavigationManager navigationManager 
+
+@inject InnForkGateway_VotingsSubsys innForkGateway_VotingsSubsys
+
+@inject IMapper _mapper
+
+@inject ICurrentUserService currentUserService
+@inject WalletConnectClientService WC_ClientService
+
+@inject INeoSCInterop_WC NeoCSInteropService
+
+
+@code
+{
+    // Injected services from the original file
+    [Inject] private ISmartContractService _smartContractService { get; set; }
+    [Inject] private IProjectOfferService _projectOfferService { get; set; }
+    [Inject] private IProjectService _projectService { get; set; }
+    [Inject] private IProductOfferService _productOfferService { get; set; }
+    [Inject] private IProductService _ProductService { get; set; }
+    [Inject] private IManufacturerService _manufacturerService { get; set; }
+    [Inject] private IBackerService _backerService { get; set; }
+    [Inject] private IInvestorService _investorService { get; set; }
+    [Inject] private IInvestmentOfferService _investmentOfferService { get; set; }
+    [Inject] private ICurrentUserService _currentUserService { get; set; }
+    [Inject] private IBaseActorModelService _baseActorModelService { get; set; }
+
+
+    ProductOfferDto currentProductOffer { get; set; }
+    string SelectedPage { get; set; } = "ProductsRewards"; // Default page
+    ManufacturerDto currentManufacturer { get; set; }
+
+    [Parameter] public List<ManufacturerDto> model_manufacturersDtos { get; set; } = new List<ManufacturerDto>();
+    [CascadingParameter] public ProjectDto projectModel { get; set; }
+    [Parameter] public List<ProductOfferDto> _productOffers { get; set; } // This parameter seems unused for currentProductOffer logic
+
+    BaseActorModelDto BaseActor = new();
+    [CascadingParameter] public MainUserData ActorsModels { get; set; } = default!;
+    public bool IsSuccessLoaded { get; set; } = false;
+    private bool _parametersInitialized = false;
+    private bool _dataLoaded = false;
+    private Guid? _lastLoadedProjectId;
+    bool BecomeManufacturerInProgress = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ActorsModels == null)
+        {
+            try
+            {
+                ActorsModels = await _currentUserService.RetrieveActorsModels();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error retrieving current user: {ex.Message}", Severity.Error);
+                return;
+            }
+        }
+
+        if (!_parametersInitialized && ActorsModels != null)
+        {
+            _parametersInitialized = true;
+            if (ActorsModels.BaseActorModelId != Guid.Empty)
+            {
+                BaseActor = ActorsModels.BaseActorDtoModel;
+            }
+        }
+        // Always call InitializeDataAsync if projectModel is set, to handle project changes
+        if (projectModel != null)
+        {
+            await InitializeDataAsync();
+        }
+    }
+
+    private async Task InitializeDataAsync()
+    {
+        if (projectModel == null) return;
+        // Avoid reloading if data is already loaded and project hasn't changed
+        if (_dataLoaded && projectModel.Id == _lastLoadedProjectId) return;
+
+        IsSuccessLoaded = false;
+        if (_dataLoaded) // Only call StateHasChanged if it's not the very first load triggered by SetParametersAsync itself
+        {
+           await InvokeAsync(StateHasChanged);
+        }
+
+
+        try
+        {
+            model_manufacturersDtos = await _manufacturerService.GetManufacturersRelatedToProjectByProjectIdAsync(projectModel.Id) ?? new List<ManufacturerDto>();
+            _lastLoadedProjectId = projectModel.Id;
+
+            if (currentManufacturer != null && !model_manufacturersDtos.Any(m => m.Id == currentManufacturer.Id))
+            {
+                currentManufacturer = null; // Deselect if current manufacturer is not in the new list
+                currentProductOffer = null;
+                SelectedPage = "ProductsRewards"; // Reset to default
+            }
+            else if (currentManufacturer != null)
+            {
+                // Refresh product offer for the currently selected manufacturer
+                await SelectManufacturer(currentManufacturer);
+            }
+            else if (model_manufacturersDtos.Any())
+            {
+                 // Optionally auto-select first manufacturer if none is selected
+                 // await SelectManufacturer(model_manufacturersDtos.First());
+            }
+
+
+            _dataLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Ошибка загрузки данных: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            IsSuccessLoaded = true;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public async Task CreateStoryBlock()
+    {
+        if (currentProductOffer == null) { Snackbar.Add("Please select a product offer first.", Severity.Warning); return; }
+
+        var storyBlock = new StoryModel();
+        DialogParameters parameters = new DialogParameters { { nameof(InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs.AddStoryDialog.StoryModel), storyBlock } };
+        DialogOptions options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs.AddStoryDialog>("Add Story", parameters, options);
+        var dialogResult = await dialog.Result;
+
+        if (!dialogResult.Canceled && dialogResult.Data is StoryModel returnedStory)
+        {
+            currentProductOffer.ProductStories ??= new List<StoryModel>();
+            currentProductOffer.ProductStories.Add(returnedStory);
+            await _productOfferService.UpdateProductOfferAsync(currentProductOffer, currentProductOffer.Id);
+            await InvokeAsync(StateHasChanged);
+            Snackbar.Add("Story block added.", Severity.Success);
+        }
+    }
+    
+    private async Task AddRiskPost()
+    {
+        if (currentProductOffer == null) { Snackbar.Add("Please select a product offer first.", Severity.Warning); return; }
+
+        var model = new ProductRiskPost();
+        DialogParameters parameters = new DialogParameters { { nameof(InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs.AddRiskDialog.Model), model } };
+        DialogOptions options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = false };
+        var dialog = await DialogService.ShowAsync<InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs.AddRiskDialog>("Add Risk", parameters, options);
+        var dialogResult = await dialog.Result;
+
+        if (!dialogResult.Canceled && dialogResult.Data is ProductRiskPost returnedRisk)
+        {
+            currentProductOffer.ProductRisks ??= new List<ProductRiskPost>();
+            currentProductOffer.ProductRisks.Add(returnedRisk);
+            await _productOfferService.UpdateProductOfferAsync(currentProductOffer, currentProductOffer.Id);
+            await InvokeAsync(StateHasChanged);
+            Snackbar.Add("Risk post added.", Severity.Success);
+        }
+    }
+
+    private async Task SelectManufacturer(ManufacturerDto manu_model)
+    {
+        currentManufacturer = manu_model;
+        if (projectModel != null && currentManufacturer != null)
+        {
+            var relatedOffers = await _productOfferService.GetProductsOffersRelatedToManufacturerByIdAsync(currentManufacturer.Id);
+            currentProductOffer = relatedOffers?.FirstOrDefault(x => x.ProjectId == projectModel.Id);
+        }
+        else
+        {
+            currentProductOffer = null;
+        }
+        if (currentProductOffer == null) SelectedPage = "ProductsRewards"; // Reset page if no offer found
+        await InvokeAsync(StateHasChanged);
+    }
+
+    protected async Task BecomeManufacturer()
+    {
+        if (projectModel == null || ActorsModels == null)
+        {
+            Snackbar.Add("Project or User data not available.", Severity.Warning);
+            return;
+        }
+
+        BecomeManufacturerInProgress = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            projectModel.ManufacturersCandidatesDtos ??= new List<ManufacturerDto>();
+            var relatedManufacturers = await _manufacturerService.GetManufacturersRelatedToProjectByProjectIdAsync(projectModel.Id) ?? new List<ManufacturerDto>();
+
+            if (relatedManufacturers.Any(m => m.Id == ActorsModels.ManufacturerId))
+            {
+                await DialogService.ShowMessageBox("Warning", "You have already registered a Product Offer for this project.", yesText: "Ok");
+                return;
+            }
+
+            ProductOfferDto newOfferDetails = await CreateProductOfferDialog();
+            if (newOfferDetails == null) return;
+
+            var commandResult = await _productOfferService.CreateProductOfferAsync(newOfferDetails, ActorsModels.ManufacturerId);
+
+            // Assuming commandResult is an object like { Succeeded: bool, Data: Guid, Message: string }
+            if (commandResult != null && commandResult.Succeeded && commandResult.Data != Guid.Empty)
+            {
+                ProductOfferDto fetchedProductOffer = await _productOfferService.GetProductOfferByIdAsync(commandResult.Data);
+                if (fetchedProductOffer == null || fetchedProductOffer.ManufacturerId != ActorsModels.ManufacturerId)
+                {
+                    Snackbar.Add("Failed to verify created product offer.", Severity.Error);
+                    return;
+                }
+                if (ActorsModels.ManufacturerDtoModel != null)
+                {
+                    projectModel.ManufacturersCandidatesDtos.Add(ActorsModels.ManufacturerDtoModel);
+                    await _projectService.UpdateProjectAsync(projectModel, projectModel.Id);
+                    model_manufacturersDtos = new List<ManufacturerDto>(projectModel.ManufacturersCandidatesDtos);
+                    Snackbar.Add("Successfully became a manufacturer candidate.", Severity.Success);
+                    await SelectManufacturer(ActorsModels.ManufacturerDtoModel); // Auto-select the new manufacturer
+                }
+                else { Snackbar.Add("Manufacturer details not found.", Severity.Error); }
+            }
+            else
+            {
+                Snackbar.Add($"Failed to create product offer: {commandResult?.ErrorMessage ?? "Unknown error"}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error in BecomeManufacturer: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            BecomeManufacturerInProgress = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    protected async Task<ProductOfferDto> CreateProductOfferDialog()
+    {
+        var productOfferModel = new ProductOfferDto();
+        if (projectModel == null || ActorsModels == null) return null;
+
+        productOfferModel.ProjectId = projectModel.Id;
+        productOfferModel.ManufacturerId = ActorsModels.ManufacturerId;
+
+        DialogParameters parameters = new DialogParameters
+        {
+            { nameof(InnFork.Server.UI.Pages.ProjectEnv.ProjectPage.Dialogs.CreateProductOfferDialog.Model), productOfferModel }
+        };
+        DialogOptions options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<InnFork.Server.UI.Pages.ProjectEnv.ProjectPage.Dialogs.CreateProductOfferDialog>("Offer Product Form", parameters, options);
+        DialogResult dialogResult = await dialog.Result;
+  
+        if (!dialogResult.Canceled && dialogResult.Data is ProductOfferDto returnedDto)
+        {
+            return returnedDto;
+        }
+        return null;
+    }
+
+    // --- Implementations for missing methods called by Razor UI ---
+    private async Task AddUpdatePost()
+    {
+        if (currentProductOffer == null) { Snackbar.Add("Please select a product offer first.", Severity.Warning); return; }
+        // Assuming AddUpdatePostDialog exists and takes ProductOfferId or similar
+        // var parameters = new DialogParameters { { "ProductOfferId", currentProductOffer.Id } };
+        // await DialogService.ShowAsync<AddUpdatePostDialog>("Add Update", parameters);
+        Snackbar.Add("Add Update clicked - Not Implemented", Severity.Info);
+        await Task.CompletedTask;
+    }
+
+    private double GetManufacturerProgress(ManufacturerDto manu_model) => manu_model != null ? 33.0 : 0.0;
+    private Color GetManufacturerProgressColor(ManufacturerDto manu_model) => Color.Info;
+    private int GetVotesForManufacturer(ManufacturerDto manu_model) => manu_model != null ? (new Random().Next(0,100)) : 0;
+    private bool IsTopCandidate(ManufacturerDto manu_model) => manu_model != null && model_manufacturersDtos.IndexOf(manu_model) == 0 && model_manufacturersDtos.Count > 1;
+
+    private async Task ReviewDialog()
+    {
+        if (currentProductOffer == null) { Snackbar.Add("Please select a product offer first.", Severity.Warning); return; }
+        var reviewModel = new ReviewModel { ProductOffer_Id = currentProductOffer.Id };
+        var parameters = new DialogParameters { { nameof(InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs.AddReviewDialog.Model), reviewModel } };
+        await DialogService.ShowAsync<InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs.AddReviewDialog>("Add Review", parameters);
+        // Handle result if needed: add to currentProductOffer.ProductReviews and update via service
+    }
+
+    private async Task ShowAddCommitmentDialog()
+    {
+        Snackbar.Add("Add Commitment clicked - Not Implemented", Severity.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task ShowAddFaqDialog()
+    {
+        Snackbar.Add("Add FAQ clicked - Not Implemented", Severity.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task ShowAddLinkDialog()
+    {
+        Snackbar.Add("Add Link clicked - Not Implemented", Severity.Info);
+        await Task.CompletedTask;
+    }
+
+    private async Task ShowAddRewardDialog()
+    {
+        if (currentProductOffer == null) { Snackbar.Add("Please select a product offer first.", Severity.Warning); return; }
+        var rewardModel = new RewardModel { ProductOffer_Id = currentProductOffer.Id };
+        var parameters = new DialogParameters { { nameof(InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs.AddRewardDialog.Model), rewardModel } };
+        
+        // Добавляем DialogOptions для управления шириной
+        DialogOptions options = new DialogOptions 
+        { 
+            CloseButton = true, 
+            MaxWidth = MaxWidth.False, // Убирает ограничение максимальной ширины
+            FullWidth = true           // Заставляет диалог пытаться занять всю ширину
+        };
+        
+        var dialog = await DialogService.ShowAsync<InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs.AddRewardDialog>("Add New Reward", parameters, options);
+        var result = await dialog.Result;
+        if (!result.Canceled && result.Data is RewardModel newReward)
+        {
+            currentProductOffer.ProductRewards ??= new List<RewardModel>();
+            currentProductOffer.ProductRewards.Add(newReward);
+            await _productOfferService.UpdateProductOfferAsync(currentProductOffer, currentProductOffer.Id);
+            await InvokeAsync(StateHasChanged);
+            Snackbar.Add("Reward added.", Severity.Success);
+        }
+    }
+
+    private async Task ShowPostCommentDialog()
+    {
+        if (currentProductOffer == null) { Snackbar.Add("Please select a product offer first.", Severity.Warning); return; }
+        var commentModel = new CommentModel { ProductOffer_Id = currentProductOffer.Id, UserName = ActorsModels?.BaseActorDtoModel?.FirstName ?? "Anonymous" };
+        var parameters = new DialogParameters { { nameof(InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs.AddCommentDialog.Model), commentModel } };
+        var dialog = await DialogService.ShowAsync<InnFork.Server.UI.Pages.Actors.Manufacturers.Personal.Projects.Dialogs.AddCommentDialog>("Post Comment", parameters);
+        var result = await dialog.Result;
+        if (!result.Canceled && result.Data is CommentModel newComment)
+        {
+            currentProductOffer.ProductComments ??= new List<CommentModel>();
+            currentProductOffer.ProductComments.Add(newComment);
+            await _productOfferService.UpdateProductOfferAsync(currentProductOffer, currentProductOffer.Id);
+            await InvokeAsync(StateHasChanged);
+            Snackbar.Add("Comment posted.", Severity.Success);
+        }
+    }
+
+
+
+    
+    #region Методы вызова API для голосований
+
+     // Ensure VotesFor, VotesAgainst, and VotesAbstained dictionaries are properly initialized with the correct key type.
+    private Dictionary<InnForkGateway_VotingsSubsys.VoteType, int> VotesFor { get; set; } = Enum.GetValues(typeof(InnForkGateway_VotingsSubsys.VoteType))
+        .Cast<InnForkGateway_VotingsSubsys.VoteType>()
+        .ToDictionary(voteType => voteType, _ => 0);
+
+    private Dictionary<InnForkGateway_VotingsSubsys.VoteType, int> VotesAgainst { get; set; } = Enum.GetValues(typeof(InnForkGateway_VotingsSubsys.VoteType))
+        .Cast<InnForkGateway_VotingsSubsys.VoteType>()
+        .ToDictionary(voteType => voteType, _ => 0);
+
+    private Dictionary<InnForkGateway_VotingsSubsys.VoteType, int> VotesAbstained { get; set; } = Enum.GetValues(typeof(InnForkGateway_VotingsSubsys.VoteType))
+        .Cast<InnForkGateway_VotingsSubsys.VoteType>()
+        .ToDictionary(voteType => voteType, _ => 0);
+
+
+    // Параметры переменных UI-элементов
+    private BackerVotesEnum SelectedVoteTypeLaunch { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypeFundraising { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypeClosure { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypeRefund { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypePauseResume { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypeFundraisingIncrease { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum SelectedVoteTypeUpdate { get; set; } = BackerVotesEnum.Positive;
+    private BackerVotesEnum ManufacturerSelectionVoteChoice { get; set; } = BackerVotesEnum.Positive; //
+    private BackerVotesEnum MilestoneVoteChoice { get; set; } = BackerVotesEnum.Positive; //
+
+    // Параметры для статистики
+    private string MilestoneManufacturerAddress { get; set; } = "";
+    private string SelectedManufacturerId { get; set; } = "";
+
+
+    private List<string> ManufacturerOptions { get; set; } = new List<string>();
+
+    private BigInteger ManufacturerSelectionPositive { get; set; } = BigInteger.Zero;
+    private BigInteger ManufacturerSelectionNegative { get; set; } = BigInteger.Zero;
+    private BigInteger LaunchApprovalPositive { get; set; } = BigInteger.Zero;
+    private BigInteger LaunchApprovalNegative { get; set; } = BigInteger.Zero;
+    private BigInteger TerminationRefundPositive { get; set; } = BigInteger.Zero;
+    private BigInteger TerminationRefundNegative { get; set; } = BigInteger.Zero;
+    private BigInteger AbstainedVotes { get; set; } = BigInteger.Zero;
+    private BigInteger ProjectUpdatePositive { get; set; } = BigInteger.Zero;
+    private BigInteger ProjectUpdateNegative { get; set; } = BigInteger.Zero;
+    private BigInteger PauseResumePositive { get; set; } = BigInteger.Zero;
+    private BigInteger PauseResumeNegative { get; set; } = BigInteger.Zero;
+    private int AbstainedVotesPercentage { get; set; } = 0;
+    private int FundraisingCompletionProgress { get; set; } = 0;
+    private int ActiveVotingsCount { get; set; } = 0;
+    private int CompletedVotingsCount { get; set; } = 0;
+    private BigInteger _totalVotes { get; set; } = BigInteger.Zero;
+    private BigInteger VoterWeight { get; set; } = BigInteger.Zero;
+    private DateTime VotingDeadline { get; set; } = DateTime.Now.AddDays(7);
+
+
+
+
+    private string ProjectIsLivingStatus { get; set; } ="Нет информации о статусе проекта";
+    private string ProjectVotingStatusMessage = "Нет информации о статусе голос";
+    private string ProjectStatusMessage { get; set; } = "Нет данных о статусе проекта";
+    private string MilestoneCompletionStatus { get; set; } = "Нет информации";
+    private string FundraisingIncreaseStatus { get; set; } = "Нет информации";
+
+    // Параметры для дополнительных действий
+    private BigInteger DeadlineExtensionTime { get; set; } = 3600; // 1 час по умолчанию
+    private BigInteger FundraisingIncreaseAmount { get; set; } = 1000000; // Значение по умолчанию
+
+    // Параметры для инициализации
+    private string _backerAddressString;
+
+    [Parameter]
+    public string BackerAddressString
+    {
+        get => _backerAddressString;
+        set => _backerAddressString = value;
+    }
+
+    private async Task<string> GetBackerAddressAsync()
+    {
+        var actorModel = await currentUserService.RetrieveActorsModels();
+        return actorModel.BaseActorDtoModel.Backer.NEO_Account_ScriptHash;
+    }
+
+
+    // Базовые параметры для тестирования
+    [Parameter] public string ProjectAddress { get; set; } = "";
+    [Parameter] public string ManufacturerAddressString { get; set; } = "0x0123456789abcdef0123456789abcdef01234567";
+    [Parameter] public VotingStepEnum ProjectVotingType { get; set; } = VotingStepEnum.ApproveProjectLaunch; // Update default value
+    [Parameter] public bool Approve { get; set; } = true;
+    [Parameter] public string UpdateHash { get; set; } = "hash123456";
+    [Parameter] public byte MilestoneStep { get; set; } = 1;
+    [Parameter] public bool IsPause { get; set; } = false;
+
+    // Отображение результатов
+    private string _lastCalledMethod = "-";
+    private string _lastResult = "Нет результатов";
+
+
+
+    private async Task CallVoteProjectLaunch()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeLaunch == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteProjectLaunch(
+                ProjectAddress, voterAddress, approve);
+
+            ShowResult("voteProjectLaunch", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteProjectLaunch", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteFundraisingCompletion()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeFundraising == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteFundraisingCompletion(
+                ProjectAddress, voterAddress, approve);
+
+            ShowResult("voteFundraisingCompletion", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteFundraisingCompletion", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteSuccefullClosure()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeClosure == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteSuccefullClosure(
+                ProjectAddress, voterAddress, approve);
+
+            ShowResult("voteSuccefullClosure", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteSuccefullClosure", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteTerminateProjectAndRefund()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeRefund == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteTerminateProjectAndRefund(
+                ProjectAddress, voterAddress, approve);
+
+            ShowResult("voteTerminateProjectAndRefund", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteTerminateProjectAndRefund", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVotePauseResumeProject()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypePauseResume == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.votePauseResumeProject(
+                ProjectAddress, voterAddress, IsPause, approve);
+
+            ShowResult("votePauseResumeProject", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("votePauseResumeProject", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteFundraisingIncrease()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeFundraisingIncrease == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteFundraisingIncrease(
+                ProjectAddress, voterAddress, approve);
+
+            ShowResult("voteFundraisingIncrease", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteFundraisingIncrease", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallRequestFundraisingIncrease()
+    {
+        try
+        {
+            var requesterAddress = GetUInt160FromString(BackerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.requestFundraisingIncrease(
+                ProjectAddress, requesterAddress, FundraisingIncreaseAmount);
+
+            ShowResult("requestFundraisingIncrease", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("requestFundraisingIncrease", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteProjectUpdates()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            bool approve = SelectedVoteTypeUpdate == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteProjectUpdates(
+                ProjectAddress, voterAddress, approve, UpdateHash);
+
+            ShowResult("voteProjectUpdates", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteProjectUpdates", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteAbstain()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.voteAbstain(
+                ProjectAddress, voterAddress, (int)ProjectVotingType, UpdateHash);
+
+            ShowResult("voteAbstain", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteAbstain", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteManufacturerWinnerSelection()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            var manufacturerAddress = GetUInt160FromString(SelectedManufacturerId);
+            bool approve = ManufacturerSelectionVoteChoice == BackerVotesEnum.Positive;
+
+            var result = await innForkGateway_VotingsSubsys.voteManufacturerWinnerSelection(
+                ProjectAddress, voterAddress, manufacturerAddress, approve);
+
+            ShowResult("voteManufacturerWinnerSelection", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteManufacturerWinnerSelection", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallVoteMilestoneCompletion(string manufacturer, BackerVotesEnum backerVotesEnum)
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            var manufacturerAddress = GetUInt160FromString(ManufacturerAddressString);
+
+
+            bool approve = backerVotesEnum == BackerVotesEnum.Positive;
+
+
+            var result = await innForkGateway_VotingsSubsys.voteMilestoneCompletion(
+                ProjectAddress, voterAddress, manufacturerAddress, MilestoneStep, approve);
+
+            ShowResult("voteMilestoneCompletion", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("voteMilestoneCompletion", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    #endregion
+    
+    private async Task RefreshStatistics()
+    {
+        try
+        {
+            // Обновление статистики голосования
+            string[]? activeVotings = await innForkGateway_VotingsSubsys.getActiveVotingsForProject(ProjectAddress);
+
+            BigInteger voterWeight = await innForkGateway_VotingsSubsys.getVoterWeight(ProjectAddress, GetUInt160FromString(BackerAddressString));
+            ulong votingDeadlineUnixTime = await innForkGateway_VotingsSubsys.getVotingDeadline(ProjectAddress, (int)ProjectVotingType);
+
+            // Обновление значений для запуска проекта
+            BigInteger launchPositive = await innForkGateway_VotingsSubsys.getLaunchApprovalPositiveVotes(ProjectAddress);
+            BigInteger launchNegative = await innForkGateway_VotingsSubsys.getLaunchApprovalNegativeVotes(ProjectAddress);
+
+            // Обновление для производителя
+            BigInteger manufacturerNegative = await innForkGateway_VotingsSubsys.getManufacturerSelectionNegativeVotes(ProjectAddress);
+
+            // Обновление для голосования о завершении с возвратом
+            BigInteger terminationRefundPositive = await innForkGateway_VotingsSubsys.getTerminationWithRefundPositiveVotes(ProjectAddress);
+            BigInteger terminationRefundNegative = await innForkGateway_VotingsSubsys.getTerminationWithRefundNegativeVotes(ProjectAddress);
+
+            // Обновление для голосования о паузе/возобновлении
+            BigInteger pauseResumePositive = await innForkGateway_VotingsSubsys.getPauseResumePositiveVotes(ProjectAddress);
+            BigInteger pauseResumeNegative = await innForkGateway_VotingsSubsys.getPauseResumeNegativeVotes(ProjectAddress);
+
+            // Обновление для голосования по обновлениям проекта
+            BigInteger projectUpdatePositive = await innForkGateway_VotingsSubsys.getProjectUpdatePositiveVotes(ProjectAddress, UpdateHash);
+            BigInteger projectUpdateNegative = await innForkGateway_VotingsSubsys.getProjectUpdateNegativeVotes(ProjectAddress, UpdateHash);
+
+            // Получение данных о воздержавшихся
+            BigInteger abstainedVotes = await innForkGateway_VotingsSubsys.getAbstainedVotes(ProjectAddress, (int)ProjectVotingType);
+            BigInteger abstainedPercentage = await innForkGateway_VotingsSubsys.getAbstainedVotesPercentage(ProjectAddress, (int)ProjectVotingType);
+
+            // Расчет прогресса сбора средств
+            BigInteger positiveVotes = await innForkGateway_VotingsSubsys.getFundraisingCompletionPositiveVotes(ProjectAddress);
+            BigInteger negativeVotes = await innForkGateway_VotingsSubsys.getFundraisingCompletionNegativeVotes(ProjectAddress);
+
+            // Обновление состояния запроса на увеличение финансирования
+            bool fundraisingIncreaseStatus = await innForkGateway_VotingsSubsys.getFundraisingIncreaseVotingStatus(ProjectAddress);
+
+
+#if DEBUG
+
+            ManufacturerAddressString = BackerAddressString; // Замените на реальный адрес производителя для тестирования
+
+#endif
+
+            // Данные о завершении этапа производителем
+            bool milestoneCompletionStatus = await innForkGateway_VotingsSubsys.getMilestoneCompletionVotingStatus(
+                ProjectAddress,
+                GetUInt160FromString(ManufacturerAddressString),
+                MilestoneStep);
+
+            // Обновление данных о статусе голосования для производителя
+            if (SelectedManufacturerId != null)
+            {
+                BigInteger manufacturerPositive = await innForkGateway_VotingsSubsys.getManufacturerSelectionPositiveVotes(
+                    ProjectAddress,
+                    GetUInt160FromString(SelectedManufacturerId));
+                ManufacturerSelectionPositive = manufacturerPositive;
+            }
+            // Присвоение значений переменным
+
+
+            // Обновление счетчика активных голосований
+            if (activeVotings != null && activeVotings.Length > 0)
+            {
+                _totalVotes = positiveVotes + negativeVotes + launchPositive + launchNegative + manufacturerNegative + terminationRefundPositive + terminationRefundNegative + pauseResumePositive + pauseResumeNegative + projectUpdatePositive + projectUpdateNegative;
+            }
+
+
+            VoterWeight = voterWeight;
+            VotingDeadline = DateTimeOffset.FromUnixTimeSeconds((long)votingDeadlineUnixTime).DateTime;
+            FundraisingIncreaseStatus = fundraisingIncreaseStatus ? "Запрос на увеличение финансирования активен" : "Запрос на увеличение финансирования завершен";
+
+            if (positiveVotes != 0 && negativeVotes != 0)
+            {
+                FundraisingCompletionProgress = (int)((positiveVotes * 100) / (positiveVotes + negativeVotes));
+            }
+
+            ProjectVotingStatusMessage = $"Статус голосования: {activeVotings?.Length ?? 0} активных голосований\n" +
+                                        $"Ваш вес голоса : {voterWeight}\n" +
+                                        $"Дедлайн голосования: {VotingDeadline}\n" +
+                                        $"Статус по увеличению финансирования: {FundraisingIncreaseStatus}\n" +
+                                        $"Статус по завершению этапа оплаты вехи: {milestoneCompletionStatus}";
+
+            MilestoneCompletionStatus = milestoneCompletionStatus ? "Голосование активно" : "Голосование завершено";
+
+            LaunchApprovalPositive = launchPositive;
+            LaunchApprovalNegative = launchNegative;
+            ManufacturerSelectionNegative = manufacturerNegative;
+            TerminationRefundPositive = terminationRefundPositive;
+            TerminationRefundNegative = terminationRefundNegative;
+
+            PauseResumePositive = pauseResumePositive;
+            PauseResumeNegative = pauseResumeNegative;
+            ProjectUpdatePositive = projectUpdatePositive;
+            ProjectUpdateNegative = projectUpdateNegative;
+
+            AbstainedVotes = abstainedVotes;
+            AbstainedVotesPercentage = (int)abstainedPercentage;
+            MilestoneManufacturerAddress = ManufacturerAddressString;
+            SelectedManufacturerId = ManufacturerAddressString;
+            MilestoneStep = 1; // Сброс значения этапа после обновления статистики
+
+            SelectedVoteTypeLaunch = BackerVotesEnum.Positive;
+            SelectedVoteTypeFundraising = BackerVotesEnum.Positive;
+            SelectedVoteTypeClosure = BackerVotesEnum.Positive;
+            SelectedVoteTypeRefund = BackerVotesEnum.Positive;
+            SelectedVoteTypePauseResume = BackerVotesEnum.Positive;
+            SelectedVoteTypeFundraisingIncrease = BackerVotesEnum.Positive;
+            SelectedVoteTypeUpdate = BackerVotesEnum.Positive;
+            ManufacturerSelectionVoteChoice = BackerVotesEnum.Positive;
+            MilestoneVoteChoice = BackerVotesEnum.Positive;
+
+            ProjectVotingType = VotingStepEnum.ApproveProjectLaunch; // Сброс значения типа голосования после обновления статистики
+
+
+            StateHasChanged();
+            ShowResult("RefreshStatistics", "Статистика успешно обновлена");
+        }
+        catch (Exception ex)
+        {
+            ShowResult("RefreshStatistics", $"Ошибка при обновлении статистики: {ex.Message}");
+        }
+    }
+
+    #region Дополнительные методы API
+
+    private async Task CallProcessMilestoneFunding()
+    {
+        try
+        {
+            var manufacturerAddress = GetUInt160FromString(ManufacturerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.processMilestoneFunding(
+                ProjectAddress, manufacturerAddress, MilestoneStep);
+
+            ShowResult("processMilestoneFunding", $"Результат: {result?.ToString() ?? "null"}");
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("processMilestoneFunding", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    bool bool_BackerAutoConsent = false;
+    bool BackerAutoConsent
+    {
+        get
+        {
+            return bool_BackerAutoConsent;
+        }
+        set
+        {
+            CallSetBackerAutoConsent().ConfigureAwait(false);
+        }
+    }
+
+    bool bool_AutoVoteForManufacturer = false;
+    bool AutoVoteForManufacturer
+    {
+        get
+        {
+            return bool_AutoVoteForManufacturer;
+        }
+        set
+        {
+            CallSetAutoVoteForManufacturer().ConfigureAwait(false);
+        }
+    }
+
+
+
+    private async Task CallSetAutoVoteForManufacturer()
+    {
+        try
+        {
+            var voterAddress = GetUInt160FromString(BackerAddressString);
+            var manufacturerAddress = GetUInt160FromString(ManufacturerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.setAutoVoteForManufacturer(ProjectAddress, voterAddress, manufacturerAddress);
+
+            if(result!= null && (result.Exception == null || result.Exception.Length == 0))
+            {
+                ShowResult("setAutoVoteForManufacturer", "Результат: производитель выбран успешно");
+            }
+            else
+            {
+                ShowResult("setAutoVoteForManufacturer", $"Ошибка: {result?.Exception ?? "неизвестная ошибка"}");
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowResult("setAutoVoteForManufacturer", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallSetBackerAutoConsent()
+    {
+        try
+        {
+            var backerAddress = GetUInt160FromString(BackerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.setBackerAutoConsent_ToUsePrizeFundToMilestoneFunding(
+                ProjectAddress, backerAddress, BackerAutoConsent);
+
+            ShowResult("setBackerAutoConsent_ToUsePrizeFundToMilestoneFunding", $"Результат: {result?.ToString() ?? "null"}");
+        }
+        catch (Exception ex)
+        {
+            ShowResult("setBackerAutoConsent_ToUsePrizeFundToMilestoneFunding", $"Ошибка: {ex.Message}");
+        }
+    }
+
+
+    private async Task CallGetBackerAutoConsent()
+    {
+        try
+        {
+            var backerAddress = GetUInt160FromString(BackerAddressString);
+
+            var result = await innForkGateway_VotingsSubsys.getBackerAutoConsent_ToUsePrizeFundToMilestoneFunding(
+                ProjectAddress, backerAddress);
+
+            ShowResult("getBackerAutoConsent", $"Результат: {result?.ToString() ?? "null"}");
+        }
+        catch (Exception ex)
+        {
+            ShowResult("getBackerAutoConsent", $"Ошибка: {ex.Message}");
+        }
+    }
+
+
+
+
+    private async Task CallAutoExtendVotingDeadline()
+    {
+        try
+        {
+            var result = await innForkGateway_VotingsSubsys.autoExtendVotingDeadline(
+                ProjectAddress, (int)(int)ProjectVotingType, (ulong)DeadlineExtensionTime);
+
+            if (result?.Exception != null)
+            {
+                ShowResult("autoExtendVotingDeadline", $"Ошибка: {result.Exception}");
+                return;
+            }
+
+            await RefreshStatistics();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("autoExtendVotingDeadline", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallFinalizeExpiredVoting()
+    {
+        try
+        {
+            var result = await innForkGateway_VotingsSubsys.finalizeExpiredVoting( ProjectAddress, (int)ProjectVotingType);
+        }
+        catch (Exception ex)
+        {
+            ShowResult("finalizeExpiredVoting", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallValidateProject()
+    {
+        try
+        {
+            bool result = await innForkGateway_VotingsSubsys.validateProjectIsLiving(ProjectAddress);
+
+            if (result)
+            {
+                ProjectIsLivingStatus = "Проект активен и живой";
+            }
+            else
+            {
+                ProjectIsLivingStatus = "Проект неактивен или завершен";
+            }
+
+            ShowResult("ValidateProjectIsLiving call result:" , ProjectIsLivingStatus); // Added confirmation message
+        }
+        catch (Exception ex)
+        {
+            ShowResult("validateProjectIsLiving", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task<string[]> CallGetProjectStatusesList()
+    {
+        try
+        {
+            var result = await innForkGateway_VotingsSubsys.getProjectStatusesList(ProjectAddress);
+
+            // Отображение результата
+            if (result != null && result.Length > 0)
+            {
+                ProjectStatusMessage = $"Статус проекта: {string.Join(", ", result)}";
+            }
+            else
+            {
+                ProjectStatusMessage = "Не удалось получить статус проекта";
+            }
+
+            ShowResult("getProjectStatus call result:", ProjectStatusMessage); // Added confirmation message
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ProjectStatusMessage = $"Ошибка при получении статуса: {ex.Message}";
+            ShowResult("getProjectStatus", $"Ошибка: {ex.Message}");
+            return null;
+        }
+    }
+    InnForkGateway_VotingsSubsys.ProjectStateRequest projectStatusType = InnForkGateway_VotingsSubsys.ProjectStateRequest.Paused;
+
+    private async Task<bool> getProjectStatusAsBoolean()
+    {
+        try
+        {        
+            var result = await innForkGateway_VotingsSubsys.getProjectStatusAsBoolean(ProjectAddress, projectStatusType);
+                            
+            string ProjectStatusMessage = $"Статус проекта: {string.Join(", ", result)}";
+    
+            ShowResult("getProjectStatus call result:", ProjectStatusMessage); // Added confirmation message
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            ProjectStatusMessage = $"Ошибка при получении статуса: {ex.Message}";
+           
+            ShowResult("getProjectStatusAsBoolean", $"Ошибка: {ex.Message}");
+
+            return false;
+        }
+    }
+
+
+
+
+
+    
+
+    private async Task CallGetCurrentVoteTypeForProject()
+    {
+        try
+        {
+            int result = await innForkGateway_VotingsSubsys.getCurrentVoteTypeForProject(ProjectAddress);
+
+            if (result != 0)
+            {
+                ProjectVotingType = (VotingStepEnum)result; // Cast result to VoteStepEnum
+                ShowResult("getCurrentVoteTypeForProject", $"Тип голосования: {(int)ProjectVotingType}"); // Display the integer value of ProjectVotingType
+            }
+            else
+            {
+                ShowResult("getCurrentVoteTypeForProject", "Тип голосования не найден или равен 0");
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("getCurrentVoteTypeForProject", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallGetSpecifiedVoteCount()
+    {
+        try
+        {
+            BigInteger result = await innForkGateway_VotingsSubsys.getSpecifiedVoteCount(
+                ProjectAddress,
+                (InnForkGateway_VotingsSubsys.VoteType)ProjectVotingType,
+                InnForkGateway_VotingsSubsys.VoteCountType.Total,
+                string.Empty);
+
+            if (result != 0)
+            {
+                _totalVotes = result;
+                ShowResult("getSpecifiedVoteCount", $"Количество голосов: {_totalVotes}");
+            }
+            else
+            {
+                ShowResult("getSpecifiedVoteCount", "Количество голосов не найдено или равно 0");
+            }
+
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("getSpecifiedVoteCount", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallGetVoterWeight()
+    {
+        try
+        {
+            UInt160? voterAddress = GetUInt160FromString(BackerAddressString);
+            BigInteger result = await innForkGateway_VotingsSubsys.getVoterWeight(ProjectAddress, voterAddress);
+
+
+            ShowResult("getVoterWeight", $"Запрашиваю вес голоса для адреса: {voterAddress}"); // Добавлено сообщение для отображения адреса голосующего
+
+            if (result != 0)
+            {
+                VoterWeight = result;
+            }
+            else
+            {
+                ShowResult("getVoterWeight", "Вес голоса не найден или равен 0");
+            }
+
+            ShowResult("getVoterWeight", $"Вес голоса: {VoterWeight}");
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("getVoterWeight", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    private async Task CallGetVotingDeadline()
+    {
+        try
+        {
+            ulong DeadLineUnixTime = await innForkGateway_VotingsSubsys.getVotingDeadline(ProjectAddress, (int)ProjectVotingType);
+
+            if (DeadLineUnixTime != 0)
+            {
+                VotingDeadline = DateTimeOffset.FromUnixTimeSeconds((long)DeadLineUnixTime).DateTime;
+            }
+            else
+            {
+                ShowResult("getVotingDeadline", "Дедлайн голосования не найден или равен 0");
+            }
+
+
+            ShowResult("getVotingDeadline", $"Дедлайн голосования: {VotingDeadline}");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowResult("getVotingDeadline", $"Ошибка: {ex.Message}");
+        }
+    }
+
+    #endregion
+
+
+
+
+    // Вспомогательные методы для преобразований
+    private UInt160 GetUInt160FromString(string address)
+    {
+        try
+        {
+            return UInt160.Parse(address);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("Неверный формат адреса: " + address, Severity.Error);
+            return UInt160.Zero;
+        }
+    }
+
+    private void ShowResult(string methodName, string result)
+    {
+        _lastCalledMethod = methodName;
+        _lastResult = result;
+    }
+
+}

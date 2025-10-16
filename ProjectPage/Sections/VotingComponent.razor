@@ -1,0 +1,79 @@
+@inject IStringLocalizer<VotingComponent> L
+@using InnFork.Application.Features.Customers.Commands.AddEdit
+@using InnFork.Application.Features.Projects.DTOs
+@using InnFork.Domain.Entities;
+@using InnFork.Domain.AnemicModels.App.Voting
+
+<MudPaper Elevation="0" Class="pa-6" Square="true">
+    <MudGrid Spacing="3">
+        <!-- Голосование по этапам -->
+        <MudItem xs="12" sm="8">
+            <MudExpansionPanels>
+                @foreach (var step in votingSteps)
+                {
+                    <MudExpansionPanel HideIcon="true">
+                        <TitleContent>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Primary" />
+                                <MudText Typo="Typo.h6">@step.GetDescription()</MudText>
+                                <MudSpacer />
+                                <MudBadge Color="Color.Primary" Content="3">
+                                    <MudIcon Icon="@Icons.Material.Filled.WorkOff" Color="Color.Default" />
+                                </MudBadge>
+                            </MudStack>
+                        </TitleContent>
+                        <ChildContent>
+                            <MudGrid>
+                                <MudItem xs="12" sm="4">
+                                    <MudText Typo="Typo.body1">@L["ЗА: "] 260486 (85%)</MudText>
+                                    <MudProgressLinear Value="0.85" Color="Color.Success" Class="my-2" />
+                                </MudItem>
+                                <MudItem xs="12" sm="4">
+                                    <MudText Typo="Typo.body1">@L["Против: "] 586 (3%)</MudText>
+                                    <MudProgressLinear Value="0.03" Color="Color.Error" Class="my-2" />
+                                </MudItem>
+                                <MudItem xs="12" sm="4">
+                                    <MudText Typo="Typo.body1">@L["Воздержаться: "] 2586 (12%)</MudText>
+                                    <MudProgressLinear Value="0.12" Class="my-2" />
+                                </MudItem>
+                            </MudGrid>
+                            <MudDivider Class="my-3" />
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                <MudText Typo="Typo.subtitle1">@L["Your Vote: "]</MudText>
+                                <MudRadioGroup   @bind-Value="selectedOption">
+                                    <MudRadio Value="selectedOption">@L["Yes"]</MudRadio>
+                                    <MudRadio Value="selectedOption">@L["No"]</MudRadio>
+                                </MudRadioGroup>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary">@L["Vote"]</MudButton>
+                            </MudStack>
+                        </ChildContent>
+                    </MudExpansionPanel>
+                }
+            </MudExpansionPanels>
+        </MudItem>
+
+
+
+
+    </MudGrid>
+</MudPaper>
+
+@code {
+    List<VotingStepEnum> votingSteps = Enum.GetValues(typeof(VotingStepEnum)).Cast<VotingStepEnum>().ToList();
+
+    VotingStep votingStep = new VotingStep();
+
+    public double[] data = { 25, 77, 28, 5 };
+    public string[] labels = { "Oil", "Coal", "Gas", "Biomass" };
+
+    public Position LegendPosition { get; set; } = Position.Bottom;
+
+    [CascadingParameter] public ProjectDto projectModel { get; set; }
+    private string selectedOption = "";
+
+    public string ManufacturerStyleMudPaperClassAttribute { get; set; } = "py-4 px-6 rounded-lg d-flex flex-column border-r-4 border-solid mud-border-primary pa-4";
+    public string CommonStyleMudPaperClassAttribute { get; set; } = "py-4 px-6 rounded-lg d-flex flex-column";
+    public string BorderAttribute { get; set; } = "my-6 d-flex gap-6 flex-wrap";
+}
+
+

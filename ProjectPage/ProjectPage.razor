@@ -1,0 +1,488 @@
+@inject IStringLocalizer<ProjectPage> L
+@page "/pages/ProjectEnv/ProjectPage/"
+
+@using System.ComponentModel;
+@using System.Text.Json
+@using System.Runtime.ExceptionServices
+@using Microsoft.Extensions.DependencyInjection
+@using InnFork.Application.Features.Backers.DTOs
+@using InnFork.Application.Features.BaseActorModels.DTOs
+@using InnFork.Application.Features.Customers.Commands.AddEdit
+@using InnFork.Application.Features.Manufacturers.DTOs
+@using InnFork.Application.Features.ProductOffers.DTOs
+@using InnFork.Application.Features.ProjectCreators.DTOs
+@using InnFork.Application.Features.Investors.DTOs
+@using InnFork.Application.Features.Projects.DTOs;
+@using InnFork.Domain.Entities;
+@using InnFork.Domain.Entities.AnemicModels;
+@using InnFork.Domain.Entities.AnemicModels.Actors;
+@using InnFork.Server.UI.Endpoint
+@using InnFork.Server.UI.Pages.Actors.Backers.Personal.SmartContract.Voting
+@using InnFork.Server.UI.Pages.Home
+@using InnFork.Server.UI.Pages.Home.Components.Common
+@using InnFork.Server.UI.Pages.ProjectEnv.ProjectPage.Dialogs
+@using InnFork.Server.UI.Pages.ProjectEnv.ProjectPage.Sections
+@using InnFork.Server.UI.Pages.ProjectEnv.ProjectPage.Sections.ProductCompaingPanel
+@using System.Numerics
+
+
+@inherits OwningComponentBase
+
+<CascadingValue Value="projectModel">
+
+    
+
+    <MudContainer Class="mt-16 px-8" MaxWidth="MaxWidth.ExtraLarge">
+
+        <MudPaper Elevation="0" Class="mt-6 mb-6 px-4 py-3 d-flex flex-column flex-md-row justify-center gap-4">
+            <ProjectMediaComponent projectModel="@projectModel" />
+        </MudPaper>
+
+
+        <MudPaper Elevation="0" Class="py-3 px-3 justify-start ">
+            
+                <MudText Typo="Typo.h6">@L["Product Candidates"]</MudText>
+
+                <CascadingValue Value="projectModel">
+                    <ProductsCandidatesComponent model_manufacturersDtos="@manufacturers" _productOffers="@productOffers" />
+                </CascadingValue>     
+                
+        </MudPaper>    
+
+
+        <MudPaper Elevation="0" Class="mt-6 mb-6 px-4 py-3 d-flex flex-column flex-md-row justify-center gap-4">
+
+            <MudButton Variant="Variant.Outlined" ButtonType="ButtonType.Button" Color="Color.Primary" OnClick="OpenProjectSettingsDialog" StartIcon="@Icons.Material.Filled.Lightbulb">@L["Project Configuration (for Creator)"]</MudButton>
+
+            <MudButton Variant="Variant.Outlined" ButtonType="ButtonType.Button" Color="Color.Primary" OnClick="OpenProjectVotingsDialog" StartIcon="@Icons.Material.Filled.Favorite">@L["Votings Subsys (For Backers)"]</MudButton>
+
+            <MudButton Variant="Variant.Outlined" ButtonType="ButtonType.Button" Color="Color.Primary" OnClick="OpenManufacturerContractDialog" StartIcon="@Icons.Material.Filled.Build">@L["Manufacturer Contract Management"]</MudButton>
+
+            <MudButton Variant="Variant.Outlined" ButtonType="ButtonType.Button" Color="Color.Primary" OnClick="OpenInvestorContractDialog" StartIcon="@Icons.Material.Filled.AttachMoney">@L["Investor Contract Management"]</MudButton>
+
+        </MudPaper>
+
+
+        <MudGrid Spacing="2" Justify="Justify.Center">
+
+            <CascadingValue Value="projectModel">
+                <CascadingValue Value="ActorsModels">
+
+                    <MudItem>
+                        <MudPaper Width="580px" Height="650px">
+                            <ProjectStatisticComponent />
+                        </MudPaper>
+                    </MudItem>
+
+                    <MudItem>
+                        <MudPaper Elevation="0" Width="450px" Height="650px">
+                            <MainStatistic />
+
+                            <MudButton OnClick="ShowNeoProjectData" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Info"
+                                       Size="Size.Large" Class="px-6 py-2">@L["Данные проекта в Neo N3"]</MudButton>
+                        </MudPaper>
+
+                    </MudItem>
+
+                    <MudItem>
+                        <MudPaper Width="720px" Height="650px">
+                            <VotingComponent />
+                        </MudPaper>
+                    </MudItem>
+                </CascadingValue>
+            </CascadingValue>
+
+        </MudGrid>
+
+    </MudContainer>
+</CascadingValue>
+
+@inject ISmartContractService _smartContractService
+@inject IProjectOfferService _projectOfferService
+@inject IProjectService _projectService
+@inject IProductOfferService _productOfferService
+@inject IProductService _ProductService
+@inject IManufacturerService _manufacturerService
+@inject IBackerService _backerService
+@inject IInvestorService _investorService
+@inject IInvestmentOfferService _investmentOfferService
+
+@inject ICurrentUserService _currentUserService
+@inject IBaseActorModelService _baseActorModelService
+
+@code
+{
+    private BigInteger ManufacturerSelectionPositive { get; set; } = BigInteger.Zero;
+    private BigInteger ManufacturerSelectionNegative { get; set; } = BigInteger.Zero;
+    private BigInteger LaunchApprovalPositive { get; set; } = BigInteger.Zero;
+    private BigInteger LaunchApprovalNegative { get; set; } = BigInteger.Zero;
+    // Existing code...
+
+    // Add the missing method to resolve the CS0103 error
+    private async Task CallVoteProjectLaunch()
+    {
+        // Implement the logic for handling the vote project launch action
+        // For now, you can add a placeholder implementation
+        Console.WriteLine("Vote for project launch has been triggered.");
+    }
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    [Inject] protected NavigationManager? NavigationManager { get; set; }
+
+    [Parameter][SupplyParameterFromQuery] public Guid ProjectId { get; set; }
+
+    public ProjectDto? projectModel { get; set; }
+
+    List<ProductOfferDto> productOffers { get; set; }
+    List<ManufacturerDto> manufacturers { get; set; }
+
+    List<BackerDto> backers { get; set; }
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    BaseActorModelDto BaseActor = new();
+
+    [CascadingParameter] public MainUserData ActorsModels { get; set; } = default!;
+
+    public bool IsSuccessLoaded { get; set; } = false;
+
+    // Флаги, чтобы инициализация выполнялась только один раз
+    private bool _parametersInitialized = false;
+    private bool _dataLoaded = false;
+    protected override async Task OnParametersSetAsync()
+    {
+        // Если каскадный параметр не установлен, пытаемся его загрузить
+        if (ActorsModels == null)
+        {
+            try
+            {
+                ActorsModels = await _currentUserService.RetrieveActorsModels();
+            }
+            catch (Exception ex)
+            {
+                return;
+            }
+        }
+
+        // Если ActorsModels успешно загружен, инициализируем связанные данные
+        if (!_parametersInitialized && ActorsModels != null)
+        {
+            _parametersInitialized = true;
+
+            if (ActorsModels.BaseActorModelId != Guid.Empty)
+            {
+                BaseActor = ActorsModels.BaseActorDtoModel;
+            }
+
+            // После инициализации параметров загружаем данные страницы
+            await InitializeDataAsync();
+        }
+    }
+
+    private async Task InitializeDataAsync()
+    {
+        // Защита от повторной загрузки данных
+        if (_dataLoaded)
+            return;
+
+        // Здесь можно выставить IsSuccessLoaded = false, если нужно показать процесс загрузки
+        IsSuccessLoaded = false;
+
+        try
+        {
+            await InitProjectModels();
+
+            // Если все данные успешно загружены, устанавливаем флаг
+            _dataLoaded = true;
+            IsSuccessLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Ошибка загрузки данных: " + ex.Message);
+            // Здесь можно добавить дополнительную обработку ошибки
+        }
+    }
+
+    // Если нет необходимости разделять логику, можно не использовать OnInitializedAsync,
+    // либо оставить для другой инициализации, не зависящей от параметров.
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        // Можно оставить пустым, если вся инициализация перенесена в OnParametersSetAsync
+    }
+    ////////////////////////////////////////////////////////////////
+
+
+
+
+
+    protected async Task InitProjectModels()
+    {
+        if (projectModel != null) return;
+
+        try
+        {
+            if (ProjectId != Guid.Empty && projectModel == null)
+            {
+                projectModel = await _projectService.GetProjectByIdAsync(ProjectId);
+            }
+
+            if (projectModel != null)
+            {
+                productOffers = await _productOfferService.GetProductsOffersRelatedToProjectByProjectIdAsync(projectModel.Id);
+                manufacturers = await _manufacturerService.GetManufacturersRelatedToProjectByProjectIdAsync(projectModel.Id);
+                backers = await _backerService.GetBackersRelatedToProjectByProjectIdAsync(projectModel.Id);
+            }
+        }
+
+        catch (Exception ex)
+        {
+            throw new AggregateException(ex);
+        }
+    }
+
+    // Метод для отображения даты в нужном формате
+    private string FormatDate(DateTime dateTime)
+    {
+        return dateTime.ToString("d MMM");
+    }
+
+    public bool _loading, _hidePosition = false;
+
+
+    private async Task OpenProjectVotingsDialog(MouseEventArgs args)
+    {
+
+        var parameters = new DialogParameters
+            {
+
+                {nameof(ProjectVotingDialog.ProjectAddress), projectModel.project_NeoN3_MetaData.neoN3_ProjectPackage.ProjectSha256Id },
+            };
+
+
+        // Здесь можно передать параметры в диалог
+
+        var dialog = DialogService.Show<ProjectVotingDialog>(@L["Votings Settings"], parameters, new DialogOptions() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraLarge });
+
+        await dialog.Result.ContinueWith(task =>
+    {
+        if (!task.IsCanceled)
+        {
+            // Обработка отмены диалога
+        }
+    });
+
+
+    }
+
+
+    private async Task OpenProjectSettingsDialog(MouseEventArgs args)
+    {
+        //ProjectSettingsDialog
+
+        var parameters = new DialogParameters
+        {
+            // Здесь можно передать параметры в диалог
+        };
+        var dialog = DialogService.Show<ProjectSettingsDialogNew>(@L["Project Settings"], parameters, new DialogOptions() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraLarge });
+
+        await dialog.Result.ContinueWith(task =>
+        {
+            if (!task.IsCanceled)
+            {
+                // Обработка отмены диалога
+            }
+        });
+    }
+
+    private async Task ShowNeoProjectData(MouseEventArgs args)
+    {
+        if (projectModel?.project_NeoN3_MetaData == null) return;
+
+        DialogOptions options = new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        DialogParameters parameters = new DialogParameters();
+
+        parameters.Add("ProjectMetaData", projectModel.project_NeoN3_MetaData);
+
+        var dialog = await DialogService.ShowAsync<NeoN3ProjectMetadataDialog>(@L["Offer in Neo N3"], parameters, options);
+
+        var DialogResult = await dialog.Result;
+    }
+    private void SelectedVoteTypeLaunch()
+    {
+
+    }
+    private void OpenManufacturerContractDialog(MouseEventArgs args)
+    {
+
+
+        var parameters = new DialogParameters
+        {
+            { nameof(ManufacturerContractDialog.ProjectId), projectModel.Id.ToString() },
+            { nameof(ManufacturerContractDialog.ManufacturerId), projectModel.Id.ToString() },
+            { nameof(ManufacturerContractDialog.ManufacturerAddress), projectModel.Id.ToString() }
+
+        };
+        var dialog = DialogService.Show<ManufacturerContractDialog>(@L["Manufacturer Contract"], parameters, new DialogOptions() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraLarge });
+        dialog.Result.ContinueWith(task =>
+        {
+            if (!task.IsCanceled)
+            {
+                // Обработка отмены диалога
+            }
+        });
+
+    }
+
+    private void OpenInvestorContractDialog(MouseEventArgs args)
+    {
+
+
+        var parameters = new DialogParameters
+        {
+
+        };
+        var dialog = DialogService.Show<InvestorContractDialog>(@L["Investor Contract"], parameters, new DialogOptions() { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraLarge });
+        dialog.Result.ContinueWith(task =>
+        {
+            if (!task.IsCanceled)
+            {
+                // Обработка отмены диалога
+            }
+        });
+
+    }
+
+}
+
+@* 
+
+# **Руководство Пользователя Платформы InnFork**
+
+## **1. Введение в Платформу InnFork**
+    1.1. Что такое InnFork?
+        1.1.1. Платформа для коллективного финансирования и реализации идей.
+        1.1.2. Объединение авторов, спонсоров, исполнителей и инвесторов.
+    1.2. Ключевые Участники Платформы:
+        1.2.1. Создатель Проекта (Автор Идеи)
+        1.2.2. Бэкер (Спонсор)
+        1.2.3. Производитель (Исполнитель)
+        1.2.4. Инвестор
+    1.3. Основные Возможности Платформы.
+
+## **2. Для Создателей Проектов (Авторов Идей)**
+    2.1. Управление Аккаунтом Создателя:
+        2.1.1. Регистрация и настройка профиля.
+        2.1.2. Управление балансом и публичным ключом.
+    2.2. Предложение Проекта (Идея):
+        2.2.1. Создание и публикация "Предложения Проекта" (описание идеи).
+        2.2.2. Получение первоначальной поддержки (донатов) на "Предложение".
+        2.2.3. Редактирование и удаление "Предложения".
+    2.3. Запуск Полноценного Проекта:
+        2.3.1. Регистрация "Проекта" на основе успешного "Предложения".
+        2.3.2. Детальное описание "Проекта", загрузка сопутствующих материалов.
+        2.3.3. Определение финансовых целей (общая сумма сбора, призовой фонд).
+        2.3.4. Настройка правил и параметров "Проекта" (сроки, тип финансирования, правила голосования).
+    2.4. Вознаграждение Создателя:
+        2.4.1. Получение комиссии или фиксированного вознаграждения за успешную реализацию "Проекта".
+
+## **3. Для Бэкеров (Спонсоров)**
+    3.1. Управление Аккаунтом Бэкера:
+        3.1.1. Регистрация и настройка профиля.
+        3.1.2. Управление балансом и публичным ключом.
+    3.2. Поддержка Идей и Проектов:
+        3.2.1. Поиск и просмотр "Предложений Проектов" и активных "Проектов".
+        3.2.2. Финансовая поддержка "Предложений Проекта" (донаты).
+        3.2.3. Внесение средств в "Проекты":
+            3.2.3.1. В общий призовой фонд "Проекта".
+            3.2.3.2. Резервирование средств для конкретного Производителя-кандидата в "Проекте".
+    3.3. Участие в Жизни Проекта:
+        3.3.1. Голосование по ключевым решениям "Проекта" (запуск, выбор исполнителя, завершение этапов и т.д.).
+        3.3.2. Настройка автоматического голосования или автоматического согласия на определенные действия.
+    3.4. Финансовые Операции:
+        3.4.1. Возможность возврата вложенных средств (при определенных условиях, например, отмена "Проекта").
+        3.4.2. Управление распределением своих средств в "Проекте".
+
+## **4. Для Производителей (Исполнителей)**
+    4.1. Управление Аккаунтом Производителя:
+        4.1.1. Регистрация и настройка профиля (включая публичный ключ).
+        4.1.2. Управление балансом.
+        4.1.3. Формирование репутации на платформе.
+    4.2. Участие в Проектах:
+        4.2.1. Подача заявки на роль исполнителя (кандидата) в активном "Проекте".
+        4.2.2. Представление своего продукта или плана работ.
+    4.3. Реализация Проекта:
+        4.3.1. В случае выбора Бэкерами – получение статуса исполнителя "Проекта".
+        4.3.2. Определение и управление этапами (milestones) выполнения работ.
+        4.3.3. Запрос финансирования на каждый этап.
+        4.3.4. Получение средств на выполнение этапов по результатам голосования Бэкеров.
+    4.4. Взаимодействие с Инвесторами:
+        4.4.1. Привлечение прямых инвестиций от Инвесторов Платформы.
+        4.4.2. Заключение "Соглашений об инвестировании".
+        4.4.3. Получение инвестиционных средств и выплата доли прибыли Инвесторам.
+    4.5. Финансовые Операции:
+        4.5.1. Вывод заработанных средств.
+
+## **5. Для Инвесторов**
+    5.1. Управление Аккаунтом Инвестора:
+        5.1.1. Регистрация и настройка профиля.
+        5.1.2. Управление балансом и публичным ключом.
+    5.2. Инвестиционная Деятельность:
+        5.2.1. Поиск Производителей и проектов для инвестирования.
+        5.2.2. Анализ предложений Производителей.
+    5.3. Соглашения и Финансирование:
+        5.3.1. Создание и подтверждение "Соглашений об инвестировании" с Производителями.
+        5.3.2. Перечисление инвестиционных средств Производителю согласно "Соглашению".
+    5.4. Получение Дохода:
+        5.4.1. Получение доли прибыли от Производителя в соответствии с условиями "Соглашения".
+        5.4.2. Вывод инвестированных средств и полученной прибыли.
+
+## **6. Проекты на Платформе InnFork**
+    6.1. Жизненный Цикл Проекта:
+        6.1.1. От "Предложения" к активному "Проекту".
+        6.1.2. Статусы: Предложен, Сбор Средств, Выбор Производителя, Производство, На Паузе, Успешно Завершен, Отменен.
+    6.2. Финансирование Проектов:
+        6.2.1. Механизмы сбора средств (например, "все или ничего", гибкое финансирование).
+        6.2.2. Формирование и использование призового фонда "Проекта".
+        6.2.3. Распределение средств между Производителями и призовым фондом.
+    6.3. Выбор Исполнителя (Производителя):
+        6.3.1. Период выдвижения кандидатур Производителей.
+        6.3.2. Голосование Бэкеров за выбор основного Производителя "Проекта".
+    6.4. Реализация и Этапы (Milestones):
+        6.4.1. Разделение работы Производителя на этапы.
+        6.4.2. Запрос и утверждение финансирования для каждого этапа Бэкерами.
+    6.5. Система Голосования в Проектах:
+        6.5.1. Ключевые вопросы, выносимые на голосование:
+            6.5.1.1. Официальный запуск "Проекта".
+            6.5.1.2. Подтверждение успешного сбора средств.
+            6.5.1.3. Выбор Производителя-победителя.
+            6.5.1.4. Утверждение выполнения и финансирования этапов Производителя.
+            6.5.1.5. Внесение изменений в параметры "Проекта".
+            6.5.1.6. Приостановка или возобновление "Проекта".
+            6.5.1.7. Досрочное завершение или отмена "Проекта" с возвратом средств.
+        6.5.2. Принципы голосования:
+            6.5.2.1. Вес голоса Бэкера (может зависеть от суммы вклада).
+            6.5.2.2. Необходимый процент участия и процент одобрения для принятия решения.
+            6.5.2.3. Возможность воздержаться от голосования.
+    6.6. Автоматизация и Управление:
+        6.6.1. Автоматическое завершение голосований по истечении срока.
+        6.6.2. Автоматическая приостановка "Проекта" при определенных условиях (например, длительное отсутствие активности).
+        6.6.3. Возможность передачи управления "Проектом" администрации платформы (при голосовании Бэкеров).
+    6.7. Безопасность и Разрешение Споров:
+        6.7.1. Механизмы выявления мошенничества.
+        6.7.2. Возможность блокировки недобросовестных участников.
+        6.7.3. Система для инициации и разрешения споров между участниками "Проекта".
+
+## **7. Общие Функции и Возможности Платформы**
+    7.1. Управление Пользовательскими Балансами:
+        7.1.1. Пополнение счета и вывод средств.
+        7.1.2. Просмотр истории транзакций.
+    7.2. Прозрачность и Информация:
+        7.2.1. Публичный доступ к информации об активных "Предложениях" и "Проектах".
+        7.2.2. Статистика по "Проектам" и голосованиям.
+    7.3. Система Уведомлений (Обзор):
+        7.3.1. Информирование участников о важных событиях в "Проектах" и голосованиях.
+ *@

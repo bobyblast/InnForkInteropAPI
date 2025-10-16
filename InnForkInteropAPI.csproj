@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+
+	<ItemGroup>
+		<PackageReference Include="Neo.FileStorage.API" Version="3.8.1" />
+		<PackageReference Include="Neo.Network.RPC.RpcClient" Version="3.8.2" />
+		<PackageReference Include="Neo.SmartContract.Framework" Version="3.8.1" />
+		<PackageReference Include="Neo.VM" Version="3.8.2" />
+		<PackageReference Include="WalletConnect.Auth" Version="2.4.3" />
+		<PackageReference Include="WalletConnect.Web3Wallet" Version="2.4.3" />
+	</ItemGroup>
+</Project>
